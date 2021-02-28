@@ -1,27 +1,60 @@
 module Main exposing (main)
 
 import Browser
-import Browser.Events exposing (onAnimationFrameDelta)
+import Browser.Events
 import Html exposing (Html)
 import Html.Attributes exposing (height, style, width)
-import Json.Decode exposing (Value)
 import Math.Matrix4 as Mat4 exposing (Mat4)
-import Math.Vector3 as Vec3 exposing (Vec3, vec3)
+import Math.Vector3 exposing (Vec3, vec3)
 import WebGL exposing (Mesh, Shader)
 
 
-main : Program Value Float Float
+type alias Model =
+    { time : Float
+    }
+
+
+type Msg
+    = Tick Float
+
+
+main : Program () Model Msg
 main =
     Browser.element
-        { init = \_ -> ( 0, Cmd.none )
+        { init = init
         , view = view
-        , subscriptions = \_ -> onAnimationFrameDelta Basics.identity
-        , update = \elapsed currentTime -> ( elapsed + currentTime, Cmd.none )
+        , subscriptions = subscriptions
+        , update = update
         }
 
 
-view : Float -> Html msg
-view t =
+init : flags -> ( Model, Cmd Msg )
+init _ =
+    let
+        model =
+            { time = 0
+            }
+
+        cmd =
+            Cmd.none
+    in
+    ( model, cmd )
+
+
+subscriptions : Model -> Sub Msg
+subscriptions _ =
+    Browser.Events.onAnimationFrameDelta Tick
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+    case msg of
+        Tick d ->
+            ( { model | time = model.time + d }, Cmd.none )
+
+
+view : Model -> Html msg
+view { time } =
     WebGL.toHtml
         [ width 400
         , height 400
@@ -31,7 +64,7 @@ view t =
             vertexShader
             fragmentShader
             mesh
-            { perspective = perspective (t / 1000) }
+            { perspective = perspective (time / 1000) }
         ]
 
 
