@@ -20,7 +20,8 @@ type alias Model =
 
 type Msg
     = Tick Float
-    | GotViewport Browser.Dom.Viewport
+    | GotViewport Int Int
+    | Resized
 
 
 main : Program () Model Msg
@@ -43,14 +44,24 @@ init _ =
             }
 
         cmd =
-            Task.perform GotViewport Browser.Dom.getViewport
+            getViewport
     in
     ( model, cmd )
 
 
+getViewport : Cmd Msg
+getViewport =
+    Task.perform
+        (\{ viewport } -> GotViewport (ceiling viewport.width) (ceiling viewport.height))
+        Browser.Dom.getViewport
+
+
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Browser.Events.onAnimationFrameDelta Tick
+    Sub.batch
+        [ Browser.Events.onAnimationFrameDelta Tick
+        , Browser.Events.onResize (\_ _ -> Resized)
+        ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -59,12 +70,15 @@ update msg model =
         Tick d ->
             ( { model | time = model.time + d }, Cmd.none )
 
-        GotViewport { viewport } ->
+        Resized ->
+            ( model, getViewport )
+
+        GotViewport width height ->
             let
                 newModel =
                     { model
-                        | width = floor viewport.width
-                        , height = floor viewport.height
+                        | width = width
+                        , height = height
                     }
             in
             ( newModel, Cmd.none )
@@ -72,21 +86,17 @@ update msg model =
 
 view : Model -> Html msg
 view model =
-    if ( model.width, model.height ) == ( 0, 0 ) then
-        Html.div [] [ Html.text "Loading..." ]
-
-    else
-        WebGL.toHtml
-            [ HA.width model.width
-            , HA.height model.height
-            , HA.style "display" "block"
-            ]
-            [ WebGL.entity
-                vertexShader
-                fragmentShader
-                mesh
-                { perspective = perspective (model.time / 10000) }
-            ]
+    WebGL.toHtml
+        [ HA.width model.width
+        , HA.height model.height
+        , HA.style "display" "block"
+        ]
+        [ WebGL.entity
+            vertexShader
+            fragmentShader
+            mesh
+            { perspective = perspective (model.time / 10000) }
+        ]
 
 
 perspective : Float -> Mat4
