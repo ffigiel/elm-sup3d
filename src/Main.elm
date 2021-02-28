@@ -38,9 +38,16 @@ main =
         }
 
 
-playerTextureUrl : String
-playerTextureUrl =
-    "player.png"
+unitSize : ( Float, Float )
+unitSize =
+    ( 1, 1 )
+
+
+textures =
+    { player = "player.png"
+    , grass = "grass.png"
+    , water = "water.png"
+    }
 
 
 init : flags -> ( Model, Cmd Msg )
@@ -51,12 +58,17 @@ init _ =
             { time = 0
             , width = 0
             , height = 0
-            , camera = Camera.fixedArea (2 * 2 * 16 * 9) ( 0, 0 )
+            , camera = Camera.fixedArea (16 * 9) ( 0, 0 )
             , resources = Resources.init
             }
 
         loadResources =
-            Cmd.map GotResources (Resources.loadTextures [ playerTextureUrl ])
+            Resources.loadTextures
+                [ textures.player
+                , textures.grass
+                , textures.water
+                ]
+                |> Cmd.map GotResources
 
         cmd : Cmd Msg
         cmd =
@@ -125,13 +137,53 @@ view model =
 
 render : Model -> List Renderable
 render model =
-    [ renderPlayer model ]
+    renderPlayer model
+        :: renderBackground model
+
+
+renderBackground : Model -> List Renderable
+renderBackground model =
+    let
+        tile texture x y =
+            Render.sprite
+                { texture = Resources.getTexture texture model.resources
+                , position = ( x, y )
+                , size = unitSize
+                }
+
+        g =
+            tile textures.grass
+
+        w =
+            tile textures.water
+    in
+    renderTileMap
+        [ [ g, g, g, g, g, g, g, g, w, w ]
+        , [ g, g, g, g, g, w, w, w, w, g ]
+        , [ g, g, g, w, w, w, w, g, g, g ]
+        , [ g, g, g, g, g, g, w, w, w, g ]
+        , [ g, g, g, g, g, g, g, w, w, w ]
+        ]
+
+
+renderTileMap : List (List (Float -> Float -> Renderable)) -> List Renderable
+renderTileMap ll =
+    let
+        renderRow y =
+            List.indexedMap (renderTile y)
+
+        renderTile y x r =
+            r (toFloat x) (toFloat (List.length ll - y - 1))
+    in
+    ll
+        |> List.indexedMap renderRow
+        |> List.concat
 
 
 renderPlayer : Model -> Renderable
 renderPlayer model =
     Render.sprite
-        { texture = Resources.getTexture playerTextureUrl model.resources
+        { texture = Resources.getTexture textures.player model.resources
         , position = ( 0, 0 )
-        , size = ( 2, 2 )
+        , size = unitSize
         }
