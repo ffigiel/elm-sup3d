@@ -1,17 +1,13 @@
 module Main exposing (main)
 
-{-
-   Rotating triangle, that is a "hello world" of the WebGL
--}
-
 import Browser
 import Browser.Events exposing (onAnimationFrameDelta)
 import Html exposing (Html)
-import Html.Attributes exposing (width, height, style)
-import WebGL exposing (Mesh, Shader)
-import Math.Matrix4 as Mat4 exposing (Mat4)
-import Math.Vector3 as Vec3 exposing (vec3, Vec3)
+import Html.Attributes exposing (height, style, width)
 import Json.Decode exposing (Value)
+import Math.Matrix4 as Mat4 exposing (Mat4)
+import Math.Vector3 as Vec3 exposing (Vec3, vec3)
+import WebGL exposing (Mesh, Shader)
 
 
 main : Program Value Float Float
@@ -19,8 +15,8 @@ main =
     Browser.element
         { init = \_ -> ( 0, Cmd.none )
         , view = view
-        , subscriptions = (\_ -> onAnimationFrameDelta Basics.identity)
-        , update = (\elapsed currentTime -> ( elapsed + currentTime, Cmd.none ))
+        , subscriptions = \_ -> onAnimationFrameDelta Basics.identity
+        , update = \elapsed currentTime -> ( elapsed + currentTime, Cmd.none )
         }
 
 
