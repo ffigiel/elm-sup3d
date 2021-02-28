@@ -1,21 +1,26 @@
 module Main exposing (main)
 
 import Browser
+import Browser.Dom
 import Browser.Events
 import Html exposing (Html)
-import Html.Attributes exposing (height, style, width)
+import Html.Attributes as HA
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector3 exposing (Vec3, vec3)
+import Task
 import WebGL exposing (Mesh, Shader)
 
 
 type alias Model =
     { time : Float
+    , width : Int
+    , height : Int
     }
 
 
 type Msg
     = Tick Float
+    | GotViewport Browser.Dom.Viewport
 
 
 main : Program () Model Msg
@@ -33,10 +38,12 @@ init _ =
     let
         model =
             { time = 0
+            , width = 0
+            , height = 0
             }
 
         cmd =
-            Cmd.none
+            Task.perform GotViewport Browser.Dom.getViewport
     in
     ( model, cmd )
 
@@ -52,20 +59,34 @@ update msg model =
         Tick d ->
             ( { model | time = model.time + d }, Cmd.none )
 
+        GotViewport { viewport } ->
+            let
+                newModel =
+                    { model
+                        | width = floor viewport.width
+                        , height = floor viewport.height
+                    }
+            in
+            ( newModel, Cmd.none )
+
 
 view : Model -> Html msg
-view { time } =
-    WebGL.toHtml
-        [ width 400
-        , height 400
-        , style "display" "block"
-        ]
-        [ WebGL.entity
-            vertexShader
-            fragmentShader
-            mesh
-            { perspective = perspective (time / 1000) }
-        ]
+view model =
+    if ( model.width, model.height ) == ( 0, 0 ) then
+        Html.div [] [ Html.text "Loading..." ]
+
+    else
+        WebGL.toHtml
+            [ HA.width model.width
+            , HA.height model.height
+            , HA.style "display" "block"
+            ]
+            [ WebGL.entity
+                vertexShader
+                fragmentShader
+                mesh
+                { perspective = perspective (model.time / 10000) }
+            ]
 
 
 perspective : Float -> Mat4
