@@ -9,6 +9,8 @@ import Game.TwoD.Camera as Camera exposing (Camera)
 import Game.TwoD.Render as Render exposing (Renderable)
 import Html exposing (Html)
 import Html.Attributes as HA
+import Keyboard
+import Keyboard.Arrows
 import Task
 
 
@@ -18,6 +20,7 @@ type alias Model =
     , width : Int
     , height : Int
     , resources : Resources
+    , keys : List Keyboard.Key
     }
 
 
@@ -26,6 +29,7 @@ type Msg
     | GotViewport Int Int
     | Resized
     | GotResources Resources.Msg
+    | KeyPress Keyboard.Msg
 
 
 main : Program () Model Msg
@@ -60,6 +64,7 @@ init _ =
             , height = 0
             , camera = Camera.fixedArea (16 * 9) ( 0, 0 )
             , resources = Resources.init
+            , keys = []
             }
 
         loadResources =
@@ -91,6 +96,7 @@ subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
         [ Browser.Events.onAnimationFrameDelta Tick
+        , Sub.map KeyPress Keyboard.subscriptions
         , Browser.Events.onResize (\_ _ -> Resized)
         ]
 
@@ -99,7 +105,8 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Tick d ->
-            ( { model | time = model.time + d }, Cmd.none )
+            { model | time = model.time + d }
+                |> tick
 
         Resized ->
             ( model, getViewport )
@@ -116,6 +123,18 @@ update msg model =
 
         GotResources rMsg ->
             ( { model | resources = Resources.update rMsg model.resources }, Cmd.none )
+
+        KeyPress kMsg ->
+            let
+                keys =
+                    Keyboard.update kMsg model.keys
+            in
+            ( { model | keys = keys }, Cmd.none )
+
+
+tick : Model -> ( Model, Cmd Msg )
+tick model =
+    ( model, Cmd.none )
 
 
 view : Model -> Html msg
