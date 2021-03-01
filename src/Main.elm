@@ -14,6 +14,14 @@ import Keyboard.Arrows
 import Task
 
 
+type Msg
+    = Tick Float
+    | GotViewport Int Int
+    | Resized
+    | GotResources Resources.Msg
+    | KeyPress Keyboard.Msg
+
+
 type alias Model =
     { time : Float
     , camera : Camera
@@ -21,15 +29,40 @@ type alias Model =
     , height : Int
     , resources : Resources
     , keys : List Keyboard.Key
+    , playerPos : ( Float, Float )
     }
 
 
-type Msg
-    = Tick Float
-    | GotViewport Int Int
-    | Resized
-    | GotResources Resources.Msg
-    | KeyPress Keyboard.Msg
+init : flags -> ( Model, Cmd Msg )
+init _ =
+    let
+        model : Model
+        model =
+            { time = 0
+            , width = 0
+            , height = 0
+            , camera = Camera.fixedArea (16 * 9) ( 0, 0 )
+            , resources = Resources.init
+            , keys = []
+            , playerPos = ( 0, 0 )
+            }
+
+        loadResources =
+            Resources.loadTextures
+                [ textures.player
+                , textures.grass
+                , textures.water
+                ]
+                |> Cmd.map GotResources
+
+        cmd : Cmd Msg
+        cmd =
+            Cmd.batch
+                [ loadResources
+                , getViewport
+                ]
+    in
+    ( model, cmd )
 
 
 main : Program () Model Msg
@@ -54,42 +87,15 @@ textures =
     }
 
 
-init : flags -> ( Model, Cmd Msg )
-init _ =
-    let
-        model : Model
-        model =
-            { time = 0
-            , width = 0
-            , height = 0
-            , camera = Camera.fixedArea (16 * 9) ( 0, 0 )
-            , resources = Resources.init
-            , keys = []
-            }
-
-        loadResources =
-            Resources.loadTextures
-                [ textures.player
-                , textures.grass
-                , textures.water
-                ]
-                |> Cmd.map GotResources
-
-        cmd : Cmd Msg
-        cmd =
-            Cmd.batch
-                [ loadResources
-                , getViewport
-                ]
-    in
-    ( model, cmd )
-
-
 getViewport : Cmd Msg
 getViewport =
     Task.perform
         (\{ viewport } -> GotViewport (ceiling viewport.width) (ceiling viewport.height))
         Browser.Dom.getViewport
+
+
+
+-- UPDATE
 
 
 subscriptions : Model -> Sub Msg
@@ -106,7 +112,7 @@ update msg model =
     case msg of
         Tick d ->
             { model | time = model.time + d }
-                |> tick
+                |> tick d
 
         Resized ->
             ( model, getViewport )
@@ -132,9 +138,37 @@ update msg model =
             ( { model | keys = keys }, Cmd.none )
 
 
-tick : Model -> ( Model, Cmd Msg )
-tick model =
-    ( model, Cmd.none )
+
+-- units per ms
+
+
+playerSpeed : Float
+playerSpeed =
+    1 / 1000
+
+
+tick : Float -> Model -> ( Model, Cmd Msg )
+tick d model =
+    let
+        arrows =
+            Keyboard.Arrows.arrows model.keys
+
+        ( x, y ) =
+            model.playerPos
+
+        newPos =
+            ( x + toFloat arrows.x * d * playerSpeed
+            , y + toFloat arrows.y * d * playerSpeed
+            )
+
+        newCamera =
+            Camera.moveTo newPos model.camera
+    in
+    ( { model | playerPos = newPos, camera = newCamera }, Cmd.none )
+
+
+
+-- VIEW
 
 
 view : Model -> Html msg
@@ -203,6 +237,6 @@ renderPlayer : Model -> Renderable
 renderPlayer model =
     Render.sprite
         { texture = Resources.getTexture textures.player model.resources
-        , position = ( 0, 0 )
+        , position = model.playerPos
         , size = unitSize
         }
