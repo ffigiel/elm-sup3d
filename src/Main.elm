@@ -158,8 +158,8 @@ tick d model =
         newPos =
             Vector3d.plus model.playerPos <|
                 Vector3d.meters
+                    (toFloat -arrows.y * d * playerSpeed)
                     (toFloat arrows.x * d * playerSpeed)
-                    (toFloat arrows.y * d * playerSpeed)
                     0
     in
     ( { model | playerPos = newPos }, Cmd.none )
