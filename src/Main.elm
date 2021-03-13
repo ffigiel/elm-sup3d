@@ -30,7 +30,7 @@ import Task
 import Temperature
 import Triangle3d
 import TriangularMesh
-import Vector3d
+import Vector3d exposing (Vector3d)
 import Viewpoint3d
 
 
@@ -46,7 +46,7 @@ type alias Model =
     , width : Int
     , height : Int
     , keys : List Keyboard.Key
-    , playerPos : ( Float, Float )
+    , playerPos : Vector3d Length.Meters WorldCoordinates
     }
 
 
@@ -59,7 +59,7 @@ init _ =
             , width = 0
             , height = 0
             , keys = []
-            , playerPos = ( 0, 0 )
+            , playerPos = Vector3d.meters 1 0 0
             }
 
         cmd : Cmd Msg
@@ -155,13 +155,12 @@ tick d model =
         arrows =
             Keyboard.Arrows.arrows model.keys
 
-        ( x, y ) =
-            model.playerPos
-
         newPos =
-            ( x + toFloat arrows.x * d * playerSpeed
-            , y + toFloat arrows.y * d * playerSpeed
-            )
+            Vector3d.plus model.playerPos <|
+                Vector3d.meters
+                    (toFloat arrows.x * d * playerSpeed)
+                    (toFloat arrows.y * d * playerSpeed)
+                    0
     in
     ( { model | playerPos = newPos }, Cmd.none )
 
@@ -177,11 +176,12 @@ type WorldCoordinates
 cubeEntity : Scene3d.Entity WorldCoordinates
 cubeEntity =
     let
+        -- 1x1m cube
         negative =
-            Length.centimeters -10
+            Length.meters -0.5
 
         positive =
-            Length.centimeters 10
+            Length.meters 0.5
 
         -- Define the eight vertices of the cube
         p1 =
@@ -238,7 +238,7 @@ cubeEntity =
     in
     -- Combine all faces into a single entity
     Scene3d.group [ bottom, top, front, back, left, right ]
-        |> Scene3d.translateBy (Vector3d.centimeters 0 0 10)
+        |> Scene3d.translateBy (Vector3d.meters 0 0 0.5)
 
 
 view : Model -> Html msg
@@ -247,33 +247,29 @@ view model =
         t =
             model.time / 100
 
-        rotationAxis =
-            Axis3d.through Point3d.origin <|
-                Direction3d.yz (Angle.degrees 90)
-
         rotatedCube =
-            cubeEntity |> Scene3d.rotateAround rotationAxis (Angle.degrees t)
+            cubeEntity |> Scene3d.translateBy model.playerPos
 
         -- Create a simple 'floor' object to cast a shadow onto
         floor =
             Scene3d.quad (Material.matte Color.darkGrey)
-                (Point3d.centimeters 50 50 0)
-                (Point3d.centimeters -50 50 0)
-                (Point3d.centimeters -50 -50 0)
-                (Point3d.centimeters 50 -50 0)
+                (Point3d.meters 5 5 0)
+                (Point3d.meters -5 5 0)
+                (Point3d.meters -5 -5 0)
+                (Point3d.meters 5 -5 0)
 
         -- Define a camera as usual
         camera =
             Camera3d.perspective
                 { viewpoint =
                     Viewpoint3d.orbit
-                        { focalPoint = Point3d.centimeters 0 0 0
+                        { focalPoint = Point3d.meters 0 0 0
                         , groundPlane = SketchPlane3d.xy
                         , azimuth = Angle.degrees 0
                         , elevation = Angle.degrees 30
-                        , distance = Length.centimeters 200
+                        , distance = Length.meters 10
                         }
-                , verticalFieldOfView = Angle.degrees 30
+                , verticalFieldOfView = Angle.degrees 45
                 }
     in
     -- Render a scene with custom lighting and other settings
@@ -281,7 +277,7 @@ view model =
         { entities = [ rotatedCube, floor ]
         , camera = camera
         , background = Scene3d.backgroundColor Color.black
-        , clipDepth = Length.centimeters 1
+        , clipDepth = Length.meters 0.01
         , dimensions = ( Pixels.int model.width, Pixels.int model.height )
         , lights = getLights model.time
         , exposure = Scene3d.exposureValue 5
@@ -297,35 +293,38 @@ getLights t =
         sunT =
             t / 1000 / 60
 
+        sunDistance =
+            100
+
         sunX =
-            -1000
+            -sunDistance
 
         sunY =
-            sin -sunT * 1000
+            sin -sunT * sunDistance
 
         sunZBase =
             -- this value ranges from 1 (noon) to -1 (midnight)
             cos sunT
 
         sunZ =
-            sunZBase * 1000
+            sunZBase * sunDistance
 
         sunCoords =
-            Point3d.centimeters sunX sunY sunZ
+            Point3d.meters sunX sunY sunZ
 
         moonCoords =
-            Point3d.centimeters (sunX / 2) (sunY / 2) (-sunZ / 2)
+            Point3d.meters (sunX / 2) (sunY / 2) (-sunZ / 2)
 
         sunLumens =
             if sunZBase > 0 then
-                sunZBase * sunZBase * 25000
+                sunZBase * sunZBase * 10000000
 
             else
                 0
 
         moonLumens =
             if sunZBase < 0 then
-                sqrt -sunZBase * 5000
+                sqrt -sunZBase * 2000000
 
             else
                 0
