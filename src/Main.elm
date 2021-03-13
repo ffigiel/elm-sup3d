@@ -1,33 +1,49 @@
 module Main exposing (main)
 
+import Angle
+import Array
+import Axis3d
 import Browser
 import Browser.Dom
 import Browser.Events
-import Game.Resources as Resources exposing (Resources)
-import Game.TwoD as Game
-import Game.TwoD.Camera as Camera exposing (Camera)
-import Game.TwoD.Render as Render exposing (Renderable)
+import Camera3d
+import Color
+import Direction3d
 import Html exposing (Html)
 import Html.Attributes as HA
+import Illuminance
 import Keyboard
 import Keyboard.Arrows
+import Length
+import LuminousFlux
+import Parameter1d
+import Pixels
+import Point3d
+import Quantity
+import Scene3d
+import Scene3d.Light as Light
+import Scene3d.Material as Material
+import Scene3d.Mesh as Mesh exposing (Mesh)
+import SketchPlane3d
+import Sphere3d
 import Task
+import Temperature
+import Triangle3d
+import TriangularMesh
+import Viewpoint3d
 
 
 type Msg
     = Tick Float
     | GotViewport Int Int
     | Resized
-    | GotResources Resources.Msg
     | KeyPress Keyboard.Msg
 
 
 type alias Model =
     { time : Float
-    , camera : Camera
     , width : Int
     , height : Int
-    , resources : Resources
     , keys : List Keyboard.Key
     , playerPos : ( Float, Float )
     }
@@ -41,26 +57,14 @@ init _ =
             { time = 0
             , width = 0
             , height = 0
-            , camera = Camera.fixedArea (16 * 9) ( 0, 0 )
-            , resources = Resources.init
             , keys = []
             , playerPos = ( 0, 0 )
             }
 
-        loadResources =
-            Resources.loadTextures
-                [ textures.player
-                , textures.grass
-                , textures.water
-                ]
-                |> Cmd.map GotResources
-
         cmd : Cmd Msg
         cmd =
             Cmd.batch
-                [ loadResources
-                , getViewport
-                ]
+                [ getViewport ]
     in
     ( model, cmd )
 
@@ -127,9 +131,6 @@ update msg model =
             in
             ( newModel, Cmd.none )
 
-        GotResources rMsg ->
-            ( { model | resources = Resources.update rMsg model.resources }, Cmd.none )
-
         KeyPress kMsg ->
             let
                 keys =
@@ -160,83 +161,191 @@ tick d model =
             ( x + toFloat arrows.x * d * playerSpeed
             , y + toFloat arrows.y * d * playerSpeed
             )
-
-        newCamera =
-            Camera.moveTo newPos model.camera
     in
-    ( { model | playerPos = newPos, camera = newCamera }, Cmd.none )
+    ( { model | playerPos = newPos }, Cmd.none )
 
 
 
 -- VIEW
 
 
+{-| Declare a coordinate system type (many apps will only need a single
+"world coordinates" type, but you can call it whatever you want)
+-}
+type WorldCoordinates
+    = WorldCoordinates
+
+
+cubeEntity : Scene3d.Entity WorldCoordinates
+cubeEntity =
+    let
+        -- Define the negative and positive X/Y/Z coordinates of a 16 'pixel'
+        -- wide cube centered at the origin (see https://package.elm-lang.org/packages/ianmackenzie/elm-units/latest/Length#cssPixels)
+        negative =
+            Length.centimeters -10
+
+        positive =
+            Length.centimeters 10
+
+        -- Define the eight vertices of the cube
+        p1 =
+            Point3d.xyz negative negative negative
+
+        p2 =
+            Point3d.xyz positive negative negative
+
+        p3 =
+            Point3d.xyz positive positive negative
+
+        p4 =
+            Point3d.xyz negative positive negative
+
+        p5 =
+            Point3d.xyz negative negative positive
+
+        p6 =
+            Point3d.xyz positive negative positive
+
+        p7 =
+            Point3d.xyz positive positive positive
+
+        p8 =
+            Point3d.xyz negative positive positive
+
+        material =
+            Material.nonmetal
+                { baseColor = Color.lightBlue
+                , roughness = 0.4 -- varies from 0 (mirror-like) to 1 (matte)
+                }
+
+        quad =
+            Scene3d.quadWithShadow material
+
+        -- Create the six faces with different colors
+        bottom =
+            quad p1 p2 p3 p4
+
+        top =
+            quad p5 p6 p7 p8
+
+        front =
+            quad p2 p3 p7 p6
+
+        back =
+            quad p1 p4 p8 p5
+
+        left =
+            quad p1 p2 p6 p5
+
+        right =
+            quad p4 p3 p7 p8
+    in
+    -- Combine all faces into a single entity
+    Scene3d.group [ bottom, top, front, back, left, right ]
+
+
 view : Model -> Html msg
 view model =
     let
-        renderParams =
-            { camera = model.camera
-            , time = model.time
-            , size = ( model.width, model.height )
-            }
-    in
-    Html.div
-        [ HA.width model.width
-        , HA.height model.height
-        , HA.style "display" "block"
-        ]
-        [ Game.render renderParams (render model) ]
+        t =
+            model.time / 100
 
+        rotationAxis =
+            Axis3d.through Point3d.origin <|
+                Direction3d.yz (Angle.degrees 90)
 
-render : Model -> List Renderable
-render model =
-    renderPlayer model
-        :: renderBackground model
+        rotatedCube =
+            cubeEntity |> Scene3d.rotateAround rotationAxis (Angle.degrees t)
 
+        -- Create a simple 'floor' object to cast a shadow onto
+        floor =
+            Scene3d.quad (Material.matte Color.darkGrey)
+                (Point3d.centimeters 50 50 -11)
+                (Point3d.centimeters -50 50 -11)
+                (Point3d.centimeters -50 -50 -11)
+                (Point3d.centimeters 50 -50 -11)
 
-renderBackground : Model -> List Renderable
-renderBackground model =
-    let
-        tile texture x y =
-            Render.sprite
-                { texture = Resources.getTexture texture model.resources
-                , position = ( x, y )
-                , size = unitSize
+        -- Define a camera as usual
+        camera =
+            Camera3d.perspective
+                { viewpoint =
+                    Viewpoint3d.orbit
+                        { focalPoint = Point3d.centimeters 0 0 0
+                        , groundPlane = SketchPlane3d.xy
+                        , azimuth = Angle.degrees 0
+                        , elevation = Angle.degrees 30
+                        , distance = Length.centimeters 200
+                        }
+                , verticalFieldOfView = Angle.degrees 30
                 }
 
-        g =
-            tile textures.grass
+        sunT =
+            model.time / 2000
 
-        w =
-            tile textures.water
+        sunX =
+            -100
+
+        sunY =
+            sin -sunT * 500
+
+        sunZBase =
+            cos sunT
+
+        sunZ =
+            sunZBase * 1000
+
+        sunLumens =
+            if sunZBase > 0 then
+                sunZBase * 50000
+
+            else
+                0
+
+        moonLumens =
+            if sunZBase < 0 then
+                -sunZBase * 10000
+
+            else
+                0
+
+        sunCoords =
+            Point3d.centimeters sunX sunY sunZ
+
+        moonCoords =
+            Point3d.centimeters sunX sunY -sunZ
+
+        sun =
+            Light.point (Light.castsShadows True)
+                { position = sunCoords
+                , chromaticity = Light.sunlight
+                , intensity = LuminousFlux.lumens sunLumens
+                }
+
+        moon =
+            Light.point (Light.castsShadows True)
+                { position = moonCoords
+                , chromaticity = Light.color Color.lightBlue
+                , intensity = LuminousFlux.lumens moonLumens
+                }
+
+        -- Create some soft lighting to fill in shadowed areas
+        softLighting =
+            Light.overhead
+                { upDirection = Direction3d.z
+                , chromaticity = Light.skylight
+                , intensity = Illuminance.lux 20
+                }
     in
-    renderTileMap
-        [ [ g, g, g, g, g, g, g, g, w, w ]
-        , [ g, g, g, g, g, w, w, w, w, g ]
-        , [ g, g, g, w, w, w, w, g, g, g ]
-        , [ g, g, g, g, g, g, w, w, w, g ]
-        , [ g, g, g, g, g, g, g, w, w, w ]
-        ]
-
-
-renderTileMap : List (List (Float -> Float -> Renderable)) -> List Renderable
-renderTileMap ll =
-    let
-        renderRow y =
-            List.indexedMap (renderTile y)
-
-        renderTile y x r =
-            r (toFloat x) (toFloat (List.length ll - y - 1))
-    in
-    ll
-        |> List.indexedMap renderRow
-        |> List.concat
-
-
-renderPlayer : Model -> Renderable
-renderPlayer model =
-    Render.sprite
-        { texture = Resources.getTexture textures.player model.resources
-        , position = model.playerPos
-        , size = unitSize
+    -- Render a scene with custom lighting and other settings
+    Scene3d.custom
+        { entities = [ rotatedCube, floor ]
+        , camera = camera
+        , background = Scene3d.backgroundColor Color.black
+        , clipDepth = Length.centimeters 1
+        , dimensions = ( Pixels.int model.width, Pixels.int model.height )
+        , lights = Scene3d.threeLights sun moon softLighting
+        , exposure = Scene3d.exposureValue 5
+        , whiteBalance = Light.skylight
+        , antialiasing = Scene3d.multisampling
+        , toneMapping = Scene3d.noToneMapping
         }
