@@ -30,6 +30,7 @@ import Task
 import Temperature
 import Triangle3d
 import TriangularMesh
+import Vector3d
 import Viewpoint3d
 
 
@@ -169,9 +170,6 @@ tick d model =
 -- VIEW
 
 
-{-| Declare a coordinate system type (many apps will only need a single
-"world coordinates" type, but you can call it whatever you want)
--}
 type WorldCoordinates
     = WorldCoordinates
 
@@ -179,8 +177,6 @@ type WorldCoordinates
 cubeEntity : Scene3d.Entity WorldCoordinates
 cubeEntity =
     let
-        -- Define the negative and positive X/Y/Z coordinates of a 16 'pixel'
-        -- wide cube centered at the origin (see https://package.elm-lang.org/packages/ianmackenzie/elm-units/latest/Length#cssPixels)
         negative =
             Length.centimeters -10
 
@@ -242,6 +238,7 @@ cubeEntity =
     in
     -- Combine all faces into a single entity
     Scene3d.group [ bottom, top, front, back, left, right ]
+        |> Scene3d.translateBy (Vector3d.centimeters 0 0 10)
 
 
 view : Model -> Html msg
@@ -260,10 +257,10 @@ view model =
         -- Create a simple 'floor' object to cast a shadow onto
         floor =
             Scene3d.quad (Material.matte Color.darkGrey)
-                (Point3d.centimeters 50 50 -11)
-                (Point3d.centimeters -50 50 -11)
-                (Point3d.centimeters -50 -50 -11)
-                (Point3d.centimeters 50 -50 -11)
+                (Point3d.centimeters 50 50 0)
+                (Point3d.centimeters -50 50 0)
+                (Point3d.centimeters -50 -50 0)
+                (Point3d.centimeters 50 -50 0)
 
         -- Define a camera as usual
         camera =
@@ -278,63 +275,6 @@ view model =
                         }
                 , verticalFieldOfView = Angle.degrees 30
                 }
-
-        sunT =
-            model.time / 2000
-
-        sunX =
-            -100
-
-        sunY =
-            sin -sunT * 500
-
-        sunZBase =
-            cos sunT
-
-        sunZ =
-            sunZBase * 1000
-
-        sunLumens =
-            if sunZBase > 0 then
-                sunZBase * 50000
-
-            else
-                0
-
-        moonLumens =
-            if sunZBase < 0 then
-                -sunZBase * 10000
-
-            else
-                0
-
-        sunCoords =
-            Point3d.centimeters sunX sunY sunZ
-
-        moonCoords =
-            Point3d.centimeters sunX sunY -sunZ
-
-        sun =
-            Light.point (Light.castsShadows True)
-                { position = sunCoords
-                , chromaticity = Light.sunlight
-                , intensity = LuminousFlux.lumens sunLumens
-                }
-
-        moon =
-            Light.point (Light.castsShadows True)
-                { position = moonCoords
-                , chromaticity = Light.color Color.lightBlue
-                , intensity = LuminousFlux.lumens moonLumens
-                }
-
-        -- Create some soft lighting to fill in shadowed areas
-        softLighting =
-            Light.overhead
-                { upDirection = Direction3d.z
-                , chromaticity = Light.skylight
-                , intensity = Illuminance.lux 20
-                }
     in
     -- Render a scene with custom lighting and other settings
     Scene3d.custom
@@ -343,9 +283,84 @@ view model =
         , background = Scene3d.backgroundColor Color.black
         , clipDepth = Length.centimeters 1
         , dimensions = ( Pixels.int model.width, Pixels.int model.height )
-        , lights = Scene3d.threeLights sun moon softLighting
+        , lights = getLights model.time
         , exposure = Scene3d.exposureValue 5
         , whiteBalance = Light.skylight
         , antialiasing = Scene3d.multisampling
         , toneMapping = Scene3d.noToneMapping
         }
+
+
+getLights : Float -> Scene3d.Lights coordinates
+getLights t =
+    let
+        sunT =
+            t / 1000 / 60
+
+        sunX =
+            -1000
+
+        sunY =
+            sin -sunT * 1000
+
+        sunZBase =
+            -- this value ranges from 1 (noon) to -1 (midnight)
+            cos sunT
+
+        sunZ =
+            sunZBase * 1000
+
+        sunCoords =
+            Point3d.centimeters sunX sunY sunZ
+
+        moonCoords =
+            Point3d.centimeters (sunX / 2) (sunY / 2) (-sunZ / 2)
+
+        sunLumens =
+            if sunZBase > 0 then
+                sunZBase * sunZBase * 25000
+
+            else
+                0
+
+        moonLumens =
+            if sunZBase < 0 then
+                sqrt -sunZBase * 5000
+
+            else
+                0
+
+        sunOrMoon =
+            if sunLumens > 0 then
+                Light.point (Light.castsShadows True)
+                    { position = sunCoords
+                    , chromaticity = Light.sunlight
+                    , intensity = LuminousFlux.lumens sunLumens
+                    }
+
+            else
+                Light.point (Light.castsShadows True)
+                    { position = moonCoords
+                    , chromaticity = Light.color Color.lightBlue
+                    , intensity = LuminousFlux.lumens moonLumens
+                    }
+
+        softLightLux =
+            let
+                scale =
+                    if sunZBase > 0 then
+                        sunZBase * sunZBase
+
+                    else
+                        sunZBase / 10
+            in
+            scale * 35 + 15
+
+        softLighting =
+            Light.overhead
+                { upDirection = Direction3d.z
+                , chromaticity = Light.skylight
+                , intensity = Illuminance.lux softLightLux
+                }
+    in
+    Scene3d.twoLights sunOrMoon softLighting
