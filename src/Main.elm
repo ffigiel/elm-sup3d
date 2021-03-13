@@ -250,7 +250,6 @@ view model =
         rotatedCube =
             cubeEntity |> Scene3d.translateBy model.playerPos
 
-        -- Create a simple 'floor' object to cast a shadow onto
         floor =
             Scene3d.quad (Material.matte Color.darkGrey)
                 (Point3d.meters 5 5 0)
@@ -258,12 +257,14 @@ view model =
                 (Point3d.meters -5 -5 0)
                 (Point3d.meters 5 -5 0)
 
-        -- Define a camera as usual
+        cameraPos =
+            Point3d.translateBy model.playerPos Point3d.origin
+
         camera =
             Camera3d.perspective
                 { viewpoint =
                     Viewpoint3d.orbit
-                        { focalPoint = Point3d.meters 0 0 0
+                        { focalPoint = cameraPos
                         , groundPlane = SketchPlane3d.xy
                         , azimuth = Angle.degrees 0
                         , elevation = Angle.degrees 30
