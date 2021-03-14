@@ -58,6 +58,7 @@ type alias Model =
     , playerPos : Vector3d Length.Meters WorldCoordinates
     , textures : Textures
     , tiles : Tiles
+    , floor : Maybe (Scene3d.Entity WorldCoordinates)
     }
 
 
@@ -86,6 +87,7 @@ init _ =
             , playerPos = Vector3d.meters 0 1 0
             , textures = textures
             , tiles = tiles
+            , floor = Nothing
             }
 
         textures =
@@ -202,8 +204,11 @@ update msg model =
                                             Just (newWaterTile tx)
                                       }
                                     )
+
+                        newModel =
+                            { model | textures = newTextures, tiles = newTiles }
                     in
-                    ( { model | textures = newTextures, tiles = newTiles }, Cmd.none )
+                    ( newModel |> updateFloor, Cmd.none )
 
                 _ ->
                     ( model, Cmd.none )
@@ -228,6 +233,16 @@ updateDeltas delta model =
             oldDeltas ++ [ delta ]
     in
     { model | deltas = newDeltas }
+
+
+updateFloor : Model -> Model
+updateFloor model =
+    case ( model.tiles.grass, model.tiles.water ) of
+        ( Just grassTile, Just waterTile ) ->
+            { model | floor = Just <| getFloor grassTile waterTile }
+
+        _ ->
+            model
 
 
 
@@ -333,9 +348,9 @@ cubeEntity =
 
 view : Model -> Html msg
 view model =
-    case ( model.tiles.grass, model.tiles.water ) of
-        ( Just grassTile, Just waterTile ) ->
-            gameView model grassTile waterTile
+    case model.floor of
+        Just floor ->
+            gameView model floor
 
         _ ->
             Html.div [] [ Html.text "Loading" ]
@@ -344,18 +359,14 @@ view model =
 gameView :
     Model
     -> Scene3d.Entity WorldCoordinates
-    -> Scene3d.Entity WorldCoordinates
     -> Html msg
-gameView model grassTile waterTile =
+gameView model floor =
     let
         t =
             model.time / 100
 
         rotatedCube =
             cubeEntity |> Scene3d.translateBy model.playerPos
-
-        floor =
-            getFloor grassTile waterTile
 
         cameraPos =
             Point3d.translateBy model.playerPos Point3d.origin
@@ -494,7 +505,10 @@ getLights t =
     Scene3d.twoLights sunOrMoon softLighting
 
 
-getFloor : Scene3d.Entity WorldCoordinates -> Scene3d.Entity WorldCoordinates -> Scene3d.Entity WorldCoordinates
+getFloor :
+    Scene3d.Entity WorldCoordinates
+    -> Scene3d.Entity WorldCoordinates
+    -> Scene3d.Entity WorldCoordinates
 getFloor grassTile waterTile =
     let
         moveTile tile x y =
