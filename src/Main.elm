@@ -51,6 +51,7 @@ type Texture
 
 type alias Model =
     { time : Float
+    , deltas : List Float
     , width : Int
     , height : Int
     , keys : List Keyboard.Key
@@ -78,6 +79,7 @@ init _ =
         model : Model
         model =
             { time = 0
+            , deltas = []
             , width = 0
             , height = 0
             , keys = []
@@ -189,13 +191,7 @@ update msg model =
                                     ( { textures | grass = Just tx }
                                     , { tiles
                                         | grass =
-                                            Just <|
-                                                newTile
-                                                    (Material.texturedNonmetal
-                                                        { baseColor = tx
-                                                        , roughness = Material.constant 0
-                                                        }
-                                                    )
+                                            Just (newGrassTile tx)
                                       }
                                     )
 
@@ -203,13 +199,7 @@ update msg model =
                                     ( { textures | water = Just tx }
                                     , { tiles
                                         | water =
-                                            Just <|
-                                                newTile
-                                                    (Material.texturedNonmetal
-                                                        { baseColor = tx
-                                                        , roughness = Material.constant 1
-                                                        }
-                                                    )
+                                            Just (newWaterTile tx)
                                       }
                                     )
                     in
@@ -217,6 +207,27 @@ update msg model =
 
                 _ ->
                     ( model, Cmd.none )
+
+
+updateDeltas : Float -> Model -> Model
+updateDeltas delta model =
+    let
+        oldDeltas =
+            case model.deltas of
+                [] ->
+                    []
+
+                _ :: rest ->
+                    if List.length model.deltas > 60 then
+                        rest
+
+                    else
+                        model.deltas
+
+        newDeltas =
+            oldDeltas ++ [ delta ]
+    in
+    { model | deltas = newDeltas }
 
 
 
@@ -241,7 +252,7 @@ tick d model =
                     (toFloat arrows.x * d * playerSpeed)
                     0
     in
-    ( { model | playerPos = newPos }, Cmd.none )
+    ( { model | playerPos = newPos } |> updateDeltas d, Cmd.none )
 
 
 
@@ -363,18 +374,46 @@ gameView model grassTile waterTile =
                 }
     in
     -- Render a scene with custom lighting and other settings
-    Scene3d.custom
-        { entities = [ rotatedCube, floor ]
-        , camera = camera
-        , background = Scene3d.backgroundColor Color.black
-        , clipDepth = Length.meters 0.01
-        , dimensions = ( Pixels.int model.width, Pixels.int model.height )
-        , lights = getLights model.time
-        , exposure = Scene3d.exposureValue 5
-        , whiteBalance = Light.skylight
-        , antialiasing = Scene3d.multisampling
-        , toneMapping = Scene3d.noToneMapping
-        }
+    Html.div []
+        [ fpsView model.deltas
+        , Scene3d.custom
+            { entities = [ rotatedCube, floor ]
+            , camera = camera
+            , background = Scene3d.backgroundColor Color.black
+            , clipDepth = Length.meters 0.01
+            , dimensions = ( Pixels.int model.width, Pixels.int model.height )
+            , lights = getLights model.time
+            , exposure = Scene3d.exposureValue 5
+            , whiteBalance = Light.skylight
+            , antialiasing = Scene3d.multisampling
+            , toneMapping = Scene3d.noToneMapping
+            }
+        ]
+
+
+fpsView : List Float -> Html msg
+fpsView deltas =
+    Html.p
+        [ HA.style "position" "absolute"
+        , HA.style "margin" "1em"
+        , HA.style "color" "white"
+        , HA.style "text-shadow" "0 0 1px black"
+        ]
+        [ fpsFromDeltas deltas
+            |> round
+            |> String.fromInt
+            |> Html.text
+        ]
+
+
+fpsFromDeltas : List Float -> Float
+fpsFromDeltas deltas =
+    case deltas of
+        [] ->
+            0
+
+        _ ->
+            1000 / (List.sum deltas / (List.length deltas |> toFloat))
 
 
 getLights : Float -> Scene3d.Lights coordinates
@@ -500,3 +539,21 @@ newTile material =
         (Point3d.meters 0 1 0)
         (Point3d.meters 0 0 0)
         (Point3d.meters 1 0 0)
+
+
+newGrassTile tx =
+    newTile
+        (Material.texturedNonmetal
+            { baseColor = tx
+            , roughness = Material.constant 0
+            }
+        )
+
+
+newWaterTile tx =
+    newTile
+        (Material.texturedNonmetal
+            { baseColor = tx
+            , roughness = Material.constant 1
+            }
+        )
