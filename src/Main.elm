@@ -23,7 +23,7 @@ import Point3d
 import Quantity
 import Scene3d
 import Scene3d.Light as Light
-import Scene3d.Material as Material
+import Scene3d.Material as Material exposing (Material)
 import Scene3d.Mesh as Mesh exposing (Mesh)
 import SketchPlane3d
 import Sphere3d
@@ -41,7 +41,12 @@ type Msg
     | GotViewport Int Int
     | Resized
     | KeyPress Keyboard.Msg
-    | GotTexture String (Result WebGL.Texture.Error (Material.Texture Color))
+    | GotTexture Texture (Result WebGL.Texture.Error (Material.Texture Color))
+
+
+type Texture
+    = Grass
+    | Water
 
 
 type alias Model =
@@ -50,7 +55,20 @@ type alias Model =
     , height : Int
     , keys : List Keyboard.Key
     , playerPos : Vector3d Length.Meters WorldCoordinates
-    , textures : Dict String (Material.Texture Color)
+    , textures : Textures
+    , tiles : Tiles
+    }
+
+
+type alias Textures =
+    { grass : Maybe (Material.Texture Color)
+    , water : Maybe (Material.Texture Color)
+    }
+
+
+type alias Tiles =
+    { grass : Maybe (Scene3d.Entity WorldCoordinates)
+    , water : Maybe (Scene3d.Entity WorldCoordinates)
     }
 
 
@@ -64,7 +82,18 @@ init _ =
             , height = 0
             , keys = []
             , playerPos = Vector3d.meters 0 1 0
-            , textures = Dict.empty
+            , textures = textures
+            , tiles = tiles
+            }
+
+        textures =
+            { grass = Nothing
+            , water = Nothing
+            }
+
+        tiles =
+            { grass = Nothing
+            , water = Nothing
             }
 
         cmd : Cmd Msg
@@ -72,10 +101,10 @@ init _ =
             Cmd.batch
                 [ getViewport
                 , Task.attempt
-                    (GotTexture "grass")
+                    (GotTexture Grass)
                     (Material.loadWith Material.nearestNeighborFiltering "/grass.png")
                 , Task.attempt
-                    (GotTexture "water")
+                    (GotTexture Water)
                     (Material.loadWith Material.nearestNeighborFiltering "/water.png")
                 ]
     in
@@ -149,9 +178,42 @@ update msg model =
                 Ok tx ->
                     let
                         textures =
-                            Dict.insert key tx model.textures
+                            model.textures
+
+                        tiles =
+                            model.tiles
+
+                        ( newTextures, newTiles ) =
+                            case key of
+                                Grass ->
+                                    ( { textures | grass = Just tx }
+                                    , { tiles
+                                        | grass =
+                                            Just <|
+                                                newTile
+                                                    (Material.texturedNonmetal
+                                                        { baseColor = tx
+                                                        , roughness = Material.constant 0
+                                                        }
+                                                    )
+                                      }
+                                    )
+
+                                Water ->
+                                    ( { textures | water = Just tx }
+                                    , { tiles
+                                        | water =
+                                            Just <|
+                                                newTile
+                                                    (Material.texturedNonmetal
+                                                        { baseColor = tx
+                                                        , roughness = Material.constant 1
+                                                        }
+                                                    )
+                                      }
+                                    )
                     in
-                    ( { model | textures = textures }, Cmd.none )
+                    ( { model | textures = newTextures, tiles = newTiles }, Cmd.none )
 
                 _ ->
                     ( model, Cmd.none )
@@ -260,9 +322,9 @@ cubeEntity =
 
 view : Model -> Html msg
 view model =
-    case ( Dict.get "grass" model.textures, Dict.get "water" model.textures ) of
-        ( Just grassTx, Just waterTx ) ->
-            gameView model grassTx waterTx
+    case ( model.tiles.grass, model.tiles.water ) of
+        ( Just grassTile, Just waterTile ) ->
+            gameView model grassTile waterTile
 
         _ ->
             Html.div [] [ Html.text "Loading" ]
@@ -270,10 +332,10 @@ view model =
 
 gameView :
     Model
-    -> Material.Texture Color
-    -> Material.Texture Color
+    -> Scene3d.Entity WorldCoordinates
+    -> Scene3d.Entity WorldCoordinates
     -> Html msg
-gameView model grassTx waterTx =
+gameView model grassTile waterTile =
     let
         t =
             model.time / 100
@@ -282,7 +344,7 @@ gameView model grassTx waterTx =
             cubeEntity |> Scene3d.translateBy model.playerPos
 
         floor =
-            getFloor grassTx waterTx
+            getFloor grassTile waterTile
 
         cameraPos =
             Point3d.translateBy model.playerPos Point3d.origin
@@ -393,32 +455,17 @@ getLights t =
     Scene3d.twoLights sunOrMoon softLighting
 
 
-getFloor : Material.Texture Color -> Material.Texture Color -> Scene3d.Entity WorldCoordinates
-getFloor grassTx waterTx =
+getFloor : Scene3d.Entity WorldCoordinates -> Scene3d.Entity WorldCoordinates -> Scene3d.Entity WorldCoordinates
+getFloor grassTile waterTile =
     let
-        tile material x y =
-            Scene3d.quad material
-                (Point3d.meters 1 1 0)
-                (Point3d.meters 0 1 0)
-                (Point3d.meters 0 0 0)
-                (Point3d.meters 1 0 0)
-                |> Scene3d.translateBy (Vector3d.meters x y 0)
+        moveTile tile x y =
+            Scene3d.translateBy (Vector3d.meters x y 0) tile
 
         w =
-            tile
-                (Material.texturedNonmetal
-                    { baseColor = waterTx
-                    , roughness = Material.constant 1
-                    }
-                )
+            moveTile waterTile
 
         g =
-            tile
-                (Material.texturedNonmetal
-                    { baseColor = grassTx
-                    , roughness = Material.constant 0
-                    }
-                )
+            moveTile grassTile
     in
     renderTileMap
         [ [ g, g, g, g, g, g, g, g, w, w ]
@@ -444,3 +491,12 @@ renderTileMap ll =
         |> List.indexedMap renderRow
         |> List.concat
         |> Scene3d.group
+
+
+newTile : Material.Textured WorldCoordinates -> Scene3d.Entity WorldCoordinates
+newTile material =
+    Scene3d.quad material
+        (Point3d.meters 1 1 0)
+        (Point3d.meters 0 1 0)
+        (Point3d.meters 0 0 0)
+        (Point3d.meters 1 0 0)
