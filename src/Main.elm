@@ -7,7 +7,8 @@ import Browser
 import Browser.Dom
 import Browser.Events
 import Camera3d
-import Color
+import Color exposing (Color)
+import Dict exposing (Dict)
 import Direction3d
 import Html exposing (Html)
 import Html.Attributes as HA
@@ -32,6 +33,7 @@ import Triangle3d
 import TriangularMesh
 import Vector3d exposing (Vector3d)
 import Viewpoint3d
+import WebGL.Texture
 
 
 type Msg
@@ -39,6 +41,7 @@ type Msg
     | GotViewport Int Int
     | Resized
     | KeyPress Keyboard.Msg
+    | GotTexture String (Result WebGL.Texture.Error (Material.Texture Color))
 
 
 type alias Model =
@@ -47,6 +50,7 @@ type alias Model =
     , height : Int
     , keys : List Keyboard.Key
     , playerPos : Vector3d Length.Meters WorldCoordinates
+    , textures : Dict String (Material.Texture Color)
     }
 
 
@@ -59,13 +63,21 @@ init _ =
             , width = 0
             , height = 0
             , keys = []
-            , playerPos = Vector3d.meters 1 0 0
+            , playerPos = Vector3d.meters 0 1 0
+            , textures = Dict.empty
             }
 
         cmd : Cmd Msg
         cmd =
             Cmd.batch
-                [ getViewport ]
+                [ getViewport
+                , Task.attempt
+                    (GotTexture "grass")
+                    (Material.loadWith Material.nearestNeighborFiltering "/grass.png")
+                , Task.attempt
+                    (GotTexture "water")
+                    (Material.loadWith Material.nearestNeighborFiltering "/water.png")
+                ]
     in
     ( model, cmd )
 
@@ -83,13 +95,6 @@ main =
 unitSize : ( Float, Float )
 unitSize =
     ( 1, 1 )
-
-
-textures =
-    { player = "player.png"
-    , grass = "grass.png"
-    , water = "water.png"
-    }
 
 
 getViewport : Cmd Msg
@@ -138,6 +143,18 @@ update msg model =
                     Keyboard.update kMsg model.keys
             in
             ( { model | keys = keys }, Cmd.none )
+
+        GotTexture key texture ->
+            case texture of
+                Ok tx ->
+                    let
+                        textures =
+                            Dict.insert key tx model.textures
+                    in
+                    ( { model | textures = textures }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
 
 
 
@@ -211,7 +228,7 @@ cubeEntity =
         material =
             Material.nonmetal
                 { baseColor = Color.lightBlue
-                , roughness = 0.4 -- varies from 0 (mirror-like) to 1 (matte)
+                , roughness = 0.6
                 }
 
         quad =
@@ -243,6 +260,20 @@ cubeEntity =
 
 view : Model -> Html msg
 view model =
+    case ( Dict.get "grass" model.textures, Dict.get "water" model.textures ) of
+        ( Just grassTx, Just waterTx ) ->
+            gameView model grassTx waterTx
+
+        _ ->
+            Html.div [] [ Html.text "Loading" ]
+
+
+gameView :
+    Model
+    -> Material.Texture Color
+    -> Material.Texture Color
+    -> Html msg
+gameView model grassTx waterTx =
     let
         t =
             model.time / 100
@@ -250,12 +281,37 @@ view model =
         rotatedCube =
             cubeEntity |> Scene3d.translateBy model.playerPos
 
+        tile material x y =
+            Scene3d.quad material
+                (Point3d.meters 1 1 0)
+                (Point3d.meters 0 1 0)
+                (Point3d.meters 0 0 0)
+                (Point3d.meters 1 0 0)
+                |> Scene3d.translateBy (Vector3d.meters x y 0)
+
+        waterTile =
+            tile
+                (Material.texturedNonmetal
+                    { baseColor = waterTx
+                    , roughness = Material.constant 1
+                    }
+                )
+
+        grassTile =
+            tile
+                (Material.texturedNonmetal
+                    { baseColor = grassTx
+                    , roughness = Material.constant 0
+                    }
+                )
+
         floor =
-            Scene3d.quad (Material.matte Color.darkGrey)
-                (Point3d.meters 5 5 0)
-                (Point3d.meters -5 5 0)
-                (Point3d.meters -5 -5 0)
-                (Point3d.meters 5 -5 0)
+            Scene3d.group
+                [ grassTile 0 0
+                , grassTile 1 0
+                , grassTile 0 1
+                , waterTile 1 1
+                ]
 
         cameraPos =
             Point3d.translateBy model.playerPos Point3d.origin
