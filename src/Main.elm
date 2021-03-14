@@ -281,37 +281,8 @@ gameView model grassTx waterTx =
         rotatedCube =
             cubeEntity |> Scene3d.translateBy model.playerPos
 
-        tile material x y =
-            Scene3d.quad material
-                (Point3d.meters 1 1 0)
-                (Point3d.meters 0 1 0)
-                (Point3d.meters 0 0 0)
-                (Point3d.meters 1 0 0)
-                |> Scene3d.translateBy (Vector3d.meters x y 0)
-
-        waterTile =
-            tile
-                (Material.texturedNonmetal
-                    { baseColor = waterTx
-                    , roughness = Material.constant 1
-                    }
-                )
-
-        grassTile =
-            tile
-                (Material.texturedNonmetal
-                    { baseColor = grassTx
-                    , roughness = Material.constant 0
-                    }
-                )
-
         floor =
-            Scene3d.group
-                [ grassTile 0 0
-                , grassTile 1 0
-                , grassTile 0 1
-                , waterTile 1 1
-                ]
+            getFloor grassTx waterTx
 
         cameraPos =
             Point3d.translateBy model.playerPos Point3d.origin
@@ -420,3 +391,56 @@ getLights t =
                 }
     in
     Scene3d.twoLights sunOrMoon softLighting
+
+
+getFloor : Material.Texture Color -> Material.Texture Color -> Scene3d.Entity WorldCoordinates
+getFloor grassTx waterTx =
+    let
+        tile material x y =
+            Scene3d.quad material
+                (Point3d.meters 1 1 0)
+                (Point3d.meters 0 1 0)
+                (Point3d.meters 0 0 0)
+                (Point3d.meters 1 0 0)
+                |> Scene3d.translateBy (Vector3d.meters x y 0)
+
+        w =
+            tile
+                (Material.texturedNonmetal
+                    { baseColor = waterTx
+                    , roughness = Material.constant 1
+                    }
+                )
+
+        g =
+            tile
+                (Material.texturedNonmetal
+                    { baseColor = grassTx
+                    , roughness = Material.constant 0
+                    }
+                )
+    in
+    renderTileMap
+        [ [ g, g, g, g, g, g, g, g, w, w ]
+        , [ g, g, g, g, g, w, w, w, w, g ]
+        , [ g, g, g, w, w, w, w, g, g, g ]
+        , [ g, g, g, g, g, g, w, w, w, g ]
+        , [ g, g, g, g, g, g, g, w, w, w ]
+        ]
+
+
+renderTileMap :
+    List (List (Float -> Float -> Scene3d.Entity WorldCoordinates))
+    -> Scene3d.Entity WorldCoordinates
+renderTileMap ll =
+    let
+        renderRow y =
+            List.indexedMap (renderTile y)
+
+        renderTile y x r =
+            r (toFloat x) (toFloat (List.length ll - y - 1))
+    in
+    ll
+        |> List.indexedMap renderRow
+        |> List.concat
+        |> Scene3d.group
