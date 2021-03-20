@@ -58,7 +58,7 @@ type alias Model =
     , playerPos : Vector3d Length.Meters WorldCoordinates
     , textures : Textures
     , tiles : Tiles
-    , floor : Maybe (Scene3d.Entity WorldCoordinates)
+    , floor : Maybe Entity
     }
 
 
@@ -69,8 +69,8 @@ type alias Textures =
 
 
 type alias Tiles =
-    { grass : Maybe (Scene3d.Entity WorldCoordinates)
-    , water : Maybe (Scene3d.Entity WorldCoordinates)
+    { grass : Maybe Entity
+    , water : Maybe Entity
     }
 
 
@@ -278,7 +278,11 @@ type WorldCoordinates
     = WorldCoordinates
 
 
-cubeEntity : Scene3d.Entity WorldCoordinates
+type alias Entity =
+    Scene3d.Entity WorldCoordinates
+
+
+cubeEntity : Entity
 cubeEntity =
     let
         -- 1x1m cube
@@ -358,7 +362,7 @@ view model =
 
 gameView :
     Model
-    -> Scene3d.Entity WorldCoordinates
+    -> Entity
     -> Html msg
 gameView model floor =
     let
@@ -506,44 +510,44 @@ getLights t =
 
 
 getFloor :
-    Scene3d.Entity WorldCoordinates
-    -> Scene3d.Entity WorldCoordinates
-    -> Scene3d.Entity WorldCoordinates
+    Entity
+    -> Entity
+    -> Entity
 getFloor grassTile waterTile =
     let
-        moveTile tile x y =
-            Scene3d.translateBy (Vector3d.meters x y 0) tile
-
         w =
-            moveTile waterTile
+            waterTile
 
         g =
-            moveTile grassTile
+            grassTile
+
+        tiles =
+            [ [ g, g, g, g, g, g, g, g, g, g ]
+            , [ g, g, g, g, g, g, g, g, g, g ]
+            , [ g, g, g, g, g, g, g, g, w, w ]
+            , [ g, g, g, g, g, w, w, w, w, g ]
+            , [ g, g, g, w, w, w, w, g, g, g ]
+            , [ g, g, g, g, g, g, w, w, w, g ]
+            , [ g, g, g, g, g, g, g, w, w, w ]
+            , [ g, g, g, g, g, g, g, g, w, w ]
+            , [ g, g, g, g, g, g, g, g, g, g ]
+            , [ g, g, g, g, g, g, g, g, g, g ]
+            ]
     in
-    renderTileMap
-        [ [ g, g, g, g, g, g, g, g, g, g ]
-        , [ g, g, g, g, g, g, g, g, g, g ]
-        , [ g, g, g, g, g, g, g, g, w, w ]
-        , [ g, g, g, g, g, w, w, w, w, g ]
-        , [ g, g, g, w, w, w, w, g, g, g ]
-        , [ g, g, g, g, g, g, w, w, w, g ]
-        , [ g, g, g, g, g, g, g, w, w, w ]
-        , [ g, g, g, g, g, g, g, g, w, w ]
-        , [ g, g, g, g, g, g, g, g, g, g ]
-        , [ g, g, g, g, g, g, g, g, g, g ]
-        ]
+    renderTileMap tiles
 
 
-renderTileMap :
-    List (List (Float -> Float -> Scene3d.Entity WorldCoordinates))
-    -> Scene3d.Entity WorldCoordinates
+renderTileMap : List (List Entity) -> Entity
 renderTileMap ll =
     let
         renderRow y =
             List.indexedMap (renderTile y)
 
-        renderTile y x r =
-            r (toFloat x) (toFloat (List.length ll - y - 1))
+        renderTile y x tile =
+            moveTile tile (toFloat x) (toFloat (List.length ll - y - 1))
+
+        moveTile tile x y =
+            Scene3d.translateBy (Vector3d.meters x y 0) tile
     in
     ll
         |> List.indexedMap renderRow
@@ -551,7 +555,7 @@ renderTileMap ll =
         |> Scene3d.group
 
 
-newTile : Material.Textured WorldCoordinates -> Scene3d.Entity WorldCoordinates
+newTile : Material.Textured WorldCoordinates -> Entity
 newTile material =
     Scene3d.quad material
         (Point3d.meters 1 1 0)
