@@ -84,7 +84,7 @@ init _ =
             , width = 0
             , height = 0
             , keys = []
-            , playerPos = Vector3d.meters 0 1 0
+            , playerPos = Vector3d.meters 5 5 0
             , textures = textures
             , tiles = tiles
             , floor = Nothing
@@ -263,8 +263,8 @@ tick d model =
         newPos =
             Vector3d.plus model.playerPos <|
                 Vector3d.meters
-                    (toFloat -arrows.y * d * playerSpeed)
                     (toFloat arrows.x * d * playerSpeed)
+                    (toFloat arrows.y * d * playerSpeed)
                     0
     in
     ( { model | playerPos = newPos } |> updateDeltas d, Cmd.none )
@@ -377,7 +377,7 @@ gameView model floor =
                     Viewpoint3d.orbit
                         { focalPoint = cameraPos
                         , groundPlane = SketchPlane3d.xy
-                        , azimuth = Angle.degrees 0
+                        , azimuth = Angle.degrees -90
                         , elevation = Angle.degrees 30
                         , distance = Length.meters 10
                         }
@@ -521,11 +521,16 @@ getFloor grassTile waterTile =
             moveTile grassTile
     in
     renderTileMap
-        [ [ g, g, g, g, g, g, g, g, w, w ]
+        [ [ g, g, g, g, g, g, g, g, g, g ]
+        , [ g, g, g, g, g, g, g, g, g, g ]
+        , [ g, g, g, g, g, g, g, g, w, w ]
         , [ g, g, g, g, g, w, w, w, w, g ]
         , [ g, g, g, w, w, w, w, g, g, g ]
         , [ g, g, g, g, g, g, w, w, w, g ]
         , [ g, g, g, g, g, g, g, w, w, w ]
+        , [ g, g, g, g, g, g, g, g, w, w ]
+        , [ g, g, g, g, g, g, g, g, g, g ]
+        , [ g, g, g, g, g, g, g, g, g, g ]
         ]
 
 
