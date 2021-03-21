@@ -84,7 +84,7 @@ init _ =
             , width = 0
             , height = 0
             , keys = []
-            , playerPos = Vector3d.meters 5 5 0
+            , playerPos = Vector3d.meters 8 4 0
             , textures = textures
             , tiles = tiles
             , floor = Nothing
@@ -521,16 +521,22 @@ getFloor grassTile waterTile =
             grassTile
 
         tiles =
-            [ [ g, g, g, g, g, g, g, g, g, g ]
-            , [ g, g, g, g, g, g, g, g, g, g ]
-            , [ g, g, g, g, g, g, g, g, w, w ]
-            , [ g, g, g, g, g, w, w, w, w, g ]
-            , [ g, g, g, w, w, w, w, g, g, g ]
-            , [ g, g, g, g, g, g, w, w, w, g ]
-            , [ g, g, g, g, g, g, g, w, w, w ]
-            , [ g, g, g, g, g, g, g, g, w, w ]
-            , [ g, g, g, g, g, g, g, g, g, g ]
-            , [ g, g, g, g, g, g, g, g, g, g ]
+            [ [ g, g, g, g, g, g, g, g, g, g, g, g, w, w, w, g ]
+            , [ g, g, g, g, g, g, g, g, g, g, w, w, w, w, w, w ]
+            , [ g, g, g, g, g, g, g, g, w, w, w, g, g, g, g, g ]
+            , [ g, g, g, g, g, w, w, w, w, g, g, g, g, g, g, g ]
+            , [ g, g, g, w, w, w, w, g, g, g, g, g, g, g, g, g ]
+            , [ g, g, g, g, g, g, w, w, w, g, g, g, g, g, g, g ]
+            , [ g, g, g, g, g, g, g, w, w, w, w, g, g, g, g, g ]
+            , [ g, g, g, g, g, g, g, g, w, w, w, w, w, g, g, g ]
+            , [ g, g, g, g, g, g, g, g, g, g, w, w, w, w, g, g ]
+            , [ g, g, g, g, g, g, g, g, g, g, g, w, w, w, g, g ]
+            , [ g, g, g, g, g, g, g, g, g, g, g, g, w, w, w, g ]
+            , [ g, g, g, g, g, g, g, g, g, g, g, g, g, w, w, g ]
+            , [ g, g, g, g, g, g, g, g, g, g, g, g, g, w, w, w ]
+            , [ g, g, g, g, g, g, g, g, g, g, g, g, g, g, w, w ]
+            , [ g, g, g, g, g, g, g, g, g, g, g, g, g, w, w, w ]
+            , [ g, g, g, g, g, g, g, g, g, g, g, g, w, w, w, w ]
             ]
     in
     renderTileMap tiles
