@@ -378,9 +378,8 @@ gameView model floor =
         camera =
             Camera3d.perspective
                 { viewpoint =
-                    Viewpoint3d.orbit
+                    Viewpoint3d.orbitZ
                         { focalPoint = cameraPos
-                        , groundPlane = SketchPlane3d.xy
                         , azimuth = Angle.degrees -90
                         , elevation = Angle.degrees 30
                         , distance = Length.meters 10
