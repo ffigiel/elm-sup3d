@@ -365,7 +365,7 @@ view model =
             gameView model floor
 
         _ ->
-            Html.div [] [ Html.text "Loading" ]
+            Html.p [] [ Html.text "Loading" ]
 
 
 gameView :
@@ -417,8 +417,6 @@ fpsView : List Float -> Html msg
 fpsView deltas =
     Html.p
         [ HA.style "position" "absolute"
-        , HA.style "margin" "1em"
-        , HA.style "color" "white"
         , HA.style "text-shadow" "0 0 1px black"
         ]
         [ fpsFromDeltas deltas
