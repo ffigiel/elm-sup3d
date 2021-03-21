@@ -25,6 +25,7 @@ import Scene3d
 import Scene3d.Light as Light
 import Scene3d.Material as Material exposing (Material)
 import Scene3d.Mesh as Mesh exposing (Mesh)
+import Set
 import SketchPlane3d
 import Sphere3d
 import Task
@@ -41,12 +42,24 @@ type Msg
     | GotViewport Int Int
     | Resized
     | KeyPress Keyboard.Msg
-    | GotTexture Texture (Result WebGL.Texture.Error (Material.Texture Color))
+    | GotTexture TextureId (Result WebGL.Texture.Error (Material.Texture Color))
 
 
-type Texture
-    = Grass
-    | Water
+type TextureId
+    = GrassTx
+    | WaterTx
+
+
+type alias Texture =
+    Material.Texture Color
+
+
+type WorldCoordinates
+    = WorldCoordinates
+
+
+type alias Entity =
+    Scene3d.Entity WorldCoordinates
 
 
 type alias Model =
@@ -105,10 +118,10 @@ init _ =
             Cmd.batch
                 [ getViewport
                 , Task.attempt
-                    (GotTexture Grass)
+                    (GotTexture GrassTx)
                     (Material.loadWith Material.nearestNeighborFiltering "/grass.png")
                 , Task.attempt
-                    (GotTexture Water)
+                    (GotTexture WaterTx)
                     (Material.loadWith Material.nearestNeighborFiltering "/water.png")
                 ]
     in
@@ -189,7 +202,7 @@ update msg model =
 
                         ( newTextures, newTiles ) =
                             case key of
-                                Grass ->
+                                GrassTx ->
                                     ( { textures | grass = Just tx }
                                     , { tiles
                                         | grass =
@@ -197,7 +210,7 @@ update msg model =
                                       }
                                     )
 
-                                Water ->
+                                WaterTx ->
                                     ( { textures | water = Just tx }
                                     , { tiles
                                         | water =
@@ -235,11 +248,15 @@ updateDeltas delta model =
     { model | deltas = newDeltas }
 
 
+
+-- update floor checks if all necessary textures are ready and creates the floor
+
+
 updateFloor : Model -> Model
 updateFloor model =
-    case ( model.tiles.grass, model.tiles.water ) of
-        ( Just grassTile, Just waterTile ) ->
-            { model | floor = Just <| getFloor grassTile waterTile }
+    case ( model.floor, model.textures.grass, model.textures.water ) of
+        ( Nothing, Just grassTx, Just waterTx ) ->
+            { model | floor = Just <| getFloor grassTx waterTx }
 
         _ ->
             model
@@ -272,14 +289,6 @@ tick d model =
 
 
 -- VIEW
-
-
-type WorldCoordinates
-    = WorldCoordinates
-
-
-type alias Entity =
-    Scene3d.Entity WorldCoordinates
 
 
 cubeEntity : Entity
@@ -326,7 +335,6 @@ cubeEntity =
         quad =
             Scene3d.quadWithShadow material
 
-        -- Create the six faces with different colors
         bottom =
             quad p1 p2 p3 p4
 
@@ -395,7 +403,7 @@ gameView model floor =
             , camera = camera
             , background = Scene3d.backgroundColor Color.black
             , clipDepth = Length.meters 0.01
-            , dimensions = ( Pixels.int model.width, Pixels.int model.height )
+            , dimensions = ( Pixels.int 480, Pixels.int 270 )
             , lights = getLights model.time
             , exposure = Scene3d.exposureValue 5
             , whiteBalance = Light.skylight
@@ -509,18 +517,25 @@ getLights t =
 
 
 getFloor :
-    Entity
+    Texture
+    -> Texture
     -> Entity
-    -> Entity
-getFloor grassTile waterTile =
+getFloor grassTx waterTx =
     let
-        w =
-            waterTile
+        ( g, w ) =
+            ( 0, 1 )
 
-        g =
-            grassTile
+        textureFromId id =
+            if id == g then
+                grassTx
 
-        tiles =
+            else if id == w then
+                waterTx
+
+            else
+                grassTx
+
+        map =
             [ [ g, g, g, g, g, g, g, g, g, g, g, g, w, w, w, g ]
             , [ g, g, g, g, g, g, g, g, g, g, w, w, w, w, w, w ]
             , [ g, g, g, g, g, g, g, g, w, w, w, g, g, g, g, g ]
@@ -538,26 +553,84 @@ getFloor grassTile waterTile =
             , [ g, g, g, g, g, g, g, g, g, g, g, g, g, w, w, w ]
             , [ g, g, g, g, g, g, g, g, g, g, g, g, w, w, w, w ]
             ]
+
+        mapsForTextures =
+            getMapsForTextures map
+
+        texturedTiles =
+            List.map (mapAndTextureToEntity textureFromId) mapsForTextures
     in
-    renderTileMap tiles
+    Scene3d.group texturedTiles
 
 
-renderTileMap : List (List Entity) -> Entity
-renderTileMap ll =
+getMapsForTextures : List (List Int) -> List ( Int, List (List Bool) )
+getMapsForTextures map =
     let
-        renderRow y =
-            List.indexedMap (renderTile y)
-
-        renderTile y x tile =
-            moveTile tile (toFloat x) (toFloat (List.length ll - y - 1))
-
-        moveTile tile x y =
-            Scene3d.translateBy (Vector3d.meters x y 0) tile
+        allTextures =
+            map
+                |> List.concat
+                |> Set.fromList
+                |> Set.toList
     in
-    ll
-        |> List.indexedMap renderRow
-        |> List.concat
-        |> Scene3d.group
+    List.map (getMapForTexture map) allTextures
+
+
+getMapForTexture : List (List Int) -> Int -> ( Int, List (List Bool) )
+getMapForTexture map id =
+    let
+        processRow =
+            List.map ((==) id)
+    in
+    ( id, List.map processRow map )
+
+
+mapAndTextureToEntity : (Int -> Texture) -> ( Int, List (List Bool) ) -> Entity
+mapAndTextureToEntity textureFromId ( id, map ) =
+    let
+        tx =
+            textureFromId id
+
+        coords2dCell y x paint =
+            if paint then
+                Just ( toFloat x, toFloat y )
+
+            else
+                Nothing
+
+        coords2dRow y =
+            List.indexedMap (coords2dCell y)
+
+        z =
+            if id == 0 then
+                0
+
+            else
+                -0.05
+
+        toTexturedFacets ( x, y ) =
+            [ ( { position = Point3d.meters x y z, uv = ( 0, 0 ) }
+              , { position = Point3d.meters (x + 1) y z, uv = ( 1, 0 ) }
+              , { position = Point3d.meters x (y + 1) z, uv = ( 0, 1 ) }
+              )
+            , ( { position = Point3d.meters x (y + 1) z, uv = ( 0, 1 ) }
+              , { position = Point3d.meters (x + 1) (y + 1) z, uv = ( 1, 1 ) }
+              , { position = Point3d.meters (x + 1) y z, uv = ( 1, 0 ) }
+              )
+            ]
+
+        mesh =
+            map
+                |> List.indexedMap coords2dRow
+                |> List.concat
+                |> List.filterMap (Maybe.map toTexturedFacets)
+                |> List.concat
+                |> TriangularMesh.triangles
+                |> Mesh.texturedFacets
+
+        material =
+            Material.texturedMatte tx
+    in
+    Scene3d.mesh material mesh
 
 
 newTile : Material.Textured WorldCoordinates -> Entity
