@@ -1,14 +1,11 @@
 module Main exposing (main)
 
 import Angle
-import Array
-import Axis3d
 import Browser
 import Browser.Dom
 import Browser.Events
 import Camera3d
 import Color exposing (Color)
-import Dict exposing (Dict)
 import Direction3d
 import Html exposing (Html)
 import Html.Attributes as HA
@@ -17,20 +14,14 @@ import Keyboard
 import Keyboard.Arrows
 import Length
 import LuminousFlux
-import Parameter1d
 import Pixels
 import Point3d
-import Quantity
 import Scene3d
 import Scene3d.Light as Light
-import Scene3d.Material as Material exposing (Material)
-import Scene3d.Mesh as Mesh exposing (Mesh)
+import Scene3d.Material as Material
+import Scene3d.Mesh as Mesh
 import Set
-import SketchPlane3d
-import Sphere3d
 import Task
-import Temperature
-import Triangle3d
 import TriangularMesh
 import Vector3d exposing (Vector3d)
 import Viewpoint3d
@@ -70,7 +61,6 @@ type alias Model =
     , keys : List Keyboard.Key
     , playerPos : Vector3d Length.Meters WorldCoordinates
     , textures : Textures
-    , tiles : Tiles
     , floor : Maybe Entity
     }
 
@@ -78,12 +68,6 @@ type alias Model =
 type alias Textures =
     { grass : Maybe (Material.Texture Color)
     , water : Maybe (Material.Texture Color)
-    }
-
-
-type alias Tiles =
-    { grass : Maybe Entity
-    , water : Maybe Entity
     }
 
 
@@ -99,16 +83,10 @@ init _ =
             , keys = []
             , playerPos = Vector3d.meters 8 4 0
             , textures = textures
-            , tiles = tiles
             , floor = Nothing
             }
 
         textures =
-            { grass = Nothing
-            , water = Nothing
-            }
-
-        tiles =
             { grass = Nothing
             , water = Nothing
             }
@@ -136,11 +114,6 @@ main =
         , subscriptions = subscriptions
         , update = update
         }
-
-
-unitSize : ( Float, Float )
-unitSize =
-    ( 1, 1 )
 
 
 getViewport : Cmd Msg
@@ -197,29 +170,16 @@ update msg model =
                         textures =
                             model.textures
 
-                        tiles =
-                            model.tiles
-
-                        ( newTextures, newTiles ) =
+                        newTextures =
                             case key of
                                 GrassTx ->
-                                    ( { textures | grass = Just tx }
-                                    , { tiles
-                                        | grass =
-                                            Just (newGrassTile tx)
-                                      }
-                                    )
+                                    { textures | grass = Just tx }
 
                                 WaterTx ->
-                                    ( { textures | water = Just tx }
-                                    , { tiles
-                                        | water =
-                                            Just (newWaterTile tx)
-                                      }
-                                    )
+                                    { textures | water = Just tx }
 
                         newModel =
-                            { model | textures = newTextures, tiles = newTiles }
+                            { model | textures = newTextures }
                     in
                     ( newModel |> updateFloor, Cmd.none )
 
@@ -374,10 +334,7 @@ gameView :
     -> Html msg
 gameView model floor =
     let
-        t =
-            model.time / 100
-
-        rotatedCube =
+        player =
             cubeEntity |> Scene3d.translateBy model.playerPos
 
         cameraPos =
@@ -399,7 +356,7 @@ gameView model floor =
     Html.div []
         [ fpsView model.deltas
         , Scene3d.custom
-            { entities = [ rotatedCube, floor ]
+            { entities = [ player, floor ]
             , camera = camera
             , background = Scene3d.backgroundColor Color.black
             , clipDepth = Length.meters 0.01
@@ -629,30 +586,3 @@ mapAndTextureToEntity textureFromId ( id, map ) =
             Material.texturedMatte tx
     in
     Scene3d.mesh material mesh
-
-
-newTile : Material.Textured WorldCoordinates -> Entity
-newTile material =
-    Scene3d.quad material
-        (Point3d.meters 1 1 0)
-        (Point3d.meters 0 1 0)
-        (Point3d.meters 0 0 0)
-        (Point3d.meters 1 0 0)
-
-
-newGrassTile tx =
-    newTile
-        (Material.texturedNonmetal
-            { baseColor = tx
-            , roughness = Material.constant 0
-            }
-        )
-
-
-newWaterTile tx =
-    newTile
-        (Material.texturedNonmetal
-            { baseColor = tx
-            , roughness = Material.constant 1
-            }
-        )
