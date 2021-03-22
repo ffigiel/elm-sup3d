@@ -236,7 +236,7 @@ updateDeltas delta model =
                     []
 
                 _ :: rest ->
-                    if List.length model.deltas > 60 then
+                    if List.length model.deltas > 120 then
                         rest
 
                     else
