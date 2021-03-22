@@ -10,7 +10,7 @@ clean:
 	rm -rf .cache dist elm-stuff
 
 dist: clean
-	"${PARCEL}" build --no-source-maps src/index.js
+	"${PARCEL}" build --no-source-maps src/index.html
 
 dev:
 	"${PARCEL}" src/index.html
