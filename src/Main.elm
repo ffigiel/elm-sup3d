@@ -513,9 +513,10 @@ dialogView dialog =
             Html.div
                 [ HA.style "position" "absolute"
                 , HA.style "bottom" "5vmin"
-                , HA.style "left" "20vw"
-                , HA.style "right" "20vw"
-                , HA.style "padding" "10vmin 10vmin"
+                , HA.style "font-size" "3vmin"
+                , HA.style "left" "50vmin"
+                , HA.style "right" "50vmin"
+                , HA.style "padding" "6vmin 6vmin"
                 , HA.style "background-color" "rgba(0, 0, 0, 75%)"
                 ]
                 [ Html.text dialogText
