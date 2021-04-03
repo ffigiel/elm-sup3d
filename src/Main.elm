@@ -13,6 +13,7 @@ import Illuminance
 import Keyboard
 import Keyboard.Arrows
 import Length
+import List.Extra as List
 import LuminousFlux
 import Pixels
 import Point3d
@@ -77,6 +78,7 @@ type alias Player =
 type alias Npc =
     { entity : Entity
     , pos : Vector3d Length.Meters WorldCoordinates
+    , dialog : List String
     }
 
 
@@ -117,9 +119,16 @@ init _ =
         npcs =
             [ { entity = makeCube Color.darkRed
               , pos = Vector3d.meters 4 12 0
+              , dialog =
+                    [ "Hey"
+                    , "What's up?"
+                    ]
               }
             , { entity = makeCube Color.purple
               , pos = Vector3d.meters 14 6 0
+              , dialog =
+                    [ "Sup"
+                    ]
               }
             ]
 
@@ -303,7 +312,7 @@ keyEvent model =
             if wasKeyPressed Keyboard.Spacebar model then
                 case model.dialog of
                     [] ->
-                        [ "test" ]
+                        findDialog model
 
                     _ ->
                         List.drop 1 model.dialog
@@ -317,6 +326,39 @@ keyEvent model =
             }
     in
     ( newModel, Cmd.none )
+
+
+findDialog : Model -> List String
+findDialog model =
+    case findNpcToTalkWith model.player model.npcs of
+        Just npc ->
+            npc.dialog
+
+        Nothing ->
+            []
+
+
+findNpcToTalkWith : Player -> List Npc -> Maybe Npc
+findNpcToTalkWith player npcs =
+    List.find (\npc -> isNearby player.pos npc.pos) npcs
+
+
+isNearby :
+    Vector3d Length.Meters WorldCoordinates
+    -> Vector3d Length.Meters WorldCoordinates
+    -> Bool
+isNearby a b =
+    let
+        minDistance =
+            2
+
+        ( ax, ay, _ ) =
+            Vector3d.toTuple Length.inMeters a
+
+        ( bx, by, _ ) =
+            Vector3d.toTuple Length.inMeters b
+    in
+    (ax - bx) ^ 2 + (ay - by) ^ 2 < (minDistance ^ 2)
 
 
 wasKeyPressed : Keyboard.Key -> Model -> Bool
