@@ -304,9 +304,13 @@ gameTick d model =
         newPlayer =
             { player | pos = newPlayerPos }
 
+        newDialog =
+            Maybe.map (\dialog -> { dialog | duration = dialog.duration + d }) model.dialog
+
         newModel =
             { model
                 | player = newPlayer
+                , dialog = newDialog
             }
     in
     ( newModel |> updateDeltas d, Cmd.none )
