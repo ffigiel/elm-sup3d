@@ -59,9 +59,15 @@ type alias Model =
     , width : Int
     , height : Int
     , keys : List Keyboard.Key
-    , playerPos : Vector3d Length.Meters WorldCoordinates
+    , player : Player
     , textures : Textures
     , floor : Maybe Entity
+    }
+
+
+type alias Player =
+    { entity : Entity
+    , pos : Vector3d Length.Meters WorldCoordinates
     }
 
 
@@ -81,9 +87,14 @@ init _ =
             , width = 0
             , height = 0
             , keys = []
-            , playerPos = Vector3d.meters 8 4 0
+            , player = player
             , textures = textures
             , floor = Nothing
+            }
+
+        player =
+            { entity = makeCube Color.lightBlue
+            , pos = Vector3d.meters 8 4 0
             }
 
         textures =
@@ -237,22 +248,28 @@ tick d model =
         arrows =
             Keyboard.Arrows.arrows model.keys
 
-        newPos =
-            Vector3d.plus model.playerPos <|
+        player =
+            model.player
+
+        newPlayerPos =
+            Vector3d.plus player.pos <|
                 Vector3d.meters
                     (toFloat arrows.x * d * playerSpeed)
                     (toFloat arrows.y * d * playerSpeed)
                     0
+
+        newPlayer =
+            { player | pos = newPlayerPos }
     in
-    ( { model | playerPos = newPos } |> updateDeltas d, Cmd.none )
+    ( { model | player = newPlayer } |> updateDeltas d, Cmd.none )
 
 
 
 -- VIEW
 
 
-cubeEntity : Entity
-cubeEntity =
+makeCube : Color -> Entity
+makeCube color =
     let
         -- 1x1m cube
         negative =
@@ -287,10 +304,7 @@ cubeEntity =
             Point3d.xyz negative positive positive
 
         material =
-            Material.nonmetal
-                { baseColor = Color.lightBlue
-                , roughness = 0.6
-                }
+            Material.matte color
 
         quad =
             Scene3d.quadWithShadow material
@@ -335,10 +349,10 @@ gameView :
 gameView model floor =
     let
         player =
-            cubeEntity |> Scene3d.translateBy model.playerPos
+            model.player.entity |> Scene3d.translateBy model.player.pos
 
         cameraPos =
-            Point3d.translateBy model.playerPos Point3d.origin
+            Point3d.translateBy model.player.pos Point3d.origin
 
         camera =
             Camera3d.perspective
