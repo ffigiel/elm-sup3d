@@ -58,11 +58,13 @@ type alias Model =
     , deltas : List Float
     , width : Int
     , height : Int
-    , keys : List Keyboard.Key
+    , pressedKeys : List Keyboard.Key
+    , keyChange : Maybe Keyboard.KeyChange
     , player : Player
     , textures : Textures
     , floor : Maybe Entity
     , npcs : List Npc
+    , dialog : List String
     }
 
 
@@ -93,16 +95,18 @@ init _ =
             , deltas = []
             , width = 0
             , height = 0
-            , keys = []
+            , pressedKeys = []
+            , keyChange = Nothing
             , player = player
             , textures = textures
             , floor = Nothing
             , npcs = npcs
+            , dialog = []
             }
 
         player =
             { entity = makeCube Color.lightBlue
-            , pos = Vector3d.meters 8 2 0
+            , pos = Vector3d.meters 8 10 0
             }
 
         textures =
@@ -169,7 +173,7 @@ update msg model =
     case msg of
         Tick d ->
             { model | time = model.time + d }
-                |> tick d
+                |> gameTick d
 
         Resized ->
             ( model, getViewport )
@@ -186,10 +190,16 @@ update msg model =
 
         KeyPress kMsg ->
             let
-                keys =
-                    Keyboard.update kMsg model.keys
+                ( pressedKeys, keyChange ) =
+                    Keyboard.updateWithKeyChange Keyboard.anyKeyOriginal kMsg model.pressedKeys
+
+                newModel =
+                    { model
+                        | pressedKeys = pressedKeys
+                        , keyChange = keyChange
+                    }
             in
-            ( { model | keys = keys }, Cmd.none )
+            newModel |> keyEvent
 
         GotTexture key texture ->
             case texture of
@@ -259,11 +269,11 @@ playerSpeed =
     1 / 1000
 
 
-tick : Float -> Model -> ( Model, Cmd Msg )
-tick d model =
+gameTick : Float -> Model -> ( Model, Cmd Msg )
+gameTick d model =
     let
         arrows =
-            Keyboard.Arrows.arrows model.keys
+            Keyboard.Arrows.arrows model.pressedKeys
 
         player =
             model.player
@@ -277,8 +287,41 @@ tick d model =
 
         newPlayer =
             { player | pos = newPlayerPos }
+
+        newModel =
+            { model
+                | player = newPlayer
+            }
     in
-    ( { model | player = newPlayer } |> updateDeltas d, Cmd.none )
+    ( newModel |> updateDeltas d, Cmd.none )
+
+
+keyEvent : Model -> ( Model, Cmd Msg )
+keyEvent model =
+    let
+        newDialog =
+            if wasKeyPressed Keyboard.Spacebar model then
+                case model.dialog of
+                    [] ->
+                        [ "test" ]
+
+                    _ ->
+                        List.drop 1 model.dialog
+
+            else
+                model.dialog
+
+        newModel =
+            { model
+                | dialog = newDialog
+            }
+    in
+    ( newModel, Cmd.none )
+
+
+wasKeyPressed : Keyboard.Key -> Model -> Bool
+wasKeyPressed key model =
+    model.keyChange == Just (Keyboard.KeyDown key)
 
 
 makeCube : Color -> Entity
@@ -389,6 +432,7 @@ gameView model floor =
     -- Render a scene with custom lighting and other settings
     Html.div []
         [ fpsView model.deltas
+        , dialogView model.dialog
         , Scene3d.custom
             { entities = [ player, floor ] ++ npcs
             , camera = camera
@@ -415,6 +459,25 @@ fpsView deltas =
             |> String.fromInt
             |> Html.text
         ]
+
+
+dialogView : List String -> Html msg
+dialogView dialog =
+    case dialog of
+        [] ->
+            Html.div [] []
+
+        dialogText :: _ ->
+            Html.div
+                [ HA.style "position" "absolute"
+                , HA.style "bottom" "5vmin"
+                , HA.style "left" "20vw"
+                , HA.style "right" "20vw"
+                , HA.style "padding" "10vmin 10vmin"
+                , HA.style "background-color" "rgba(0, 0, 0, 75%)"
+                ]
+                [ Html.text dialogText
+                ]
 
 
 fpsFromDeltas : List Float -> Float
