@@ -62,10 +62,17 @@ type alias Model =
     , player : Player
     , textures : Textures
     , floor : Maybe Entity
+    , npcs : List Npc
     }
 
 
 type alias Player =
+    { entity : Entity
+    , pos : Vector3d Length.Meters WorldCoordinates
+    }
+
+
+type alias Npc =
     { entity : Entity
     , pos : Vector3d Length.Meters WorldCoordinates
     }
@@ -90,17 +97,27 @@ init _ =
             , player = player
             , textures = textures
             , floor = Nothing
+            , npcs = npcs
             }
 
         player =
             { entity = makeCube Color.lightBlue
-            , pos = Vector3d.meters 8 4 0
+            , pos = Vector3d.meters 8 2 0
             }
 
         textures =
             { grass = Nothing
             , water = Nothing
             }
+
+        npcs =
+            [ { entity = makeCube Color.darkRed
+              , pos = Vector3d.meters 4 12 0
+              }
+            , { entity = makeCube Color.purple
+              , pos = Vector3d.meters 14 6 0
+              }
+            ]
 
         cmd : Cmd Msg
         cmd =
@@ -264,10 +281,6 @@ tick d model =
     ( { model | player = newPlayer } |> updateDeltas d, Cmd.none )
 
 
-
--- VIEW
-
-
 makeCube : Color -> Entity
 makeCube color =
     let
@@ -332,6 +345,10 @@ makeCube color =
         |> Scene3d.translateBy (Vector3d.meters 0 0 0.5)
 
 
+
+-- VIEW
+
+
 view : Model -> Html msg
 view model =
     case model.floor of
@@ -350,6 +367,9 @@ gameView model floor =
     let
         player =
             model.player.entity |> Scene3d.translateBy model.player.pos
+
+        npcs =
+            List.map (\n -> Scene3d.translateBy n.pos n.entity) model.npcs
 
         cameraPos =
             Point3d.translateBy model.player.pos Point3d.origin
@@ -370,7 +390,7 @@ gameView model floor =
     Html.div []
         [ fpsView model.deltas
         , Scene3d.custom
-            { entities = [ player, floor ]
+            { entities = [ player, floor ] ++ npcs
             , camera = camera
             , background = Scene3d.backgroundColor Color.black
             , clipDepth = Length.meters 0.01
