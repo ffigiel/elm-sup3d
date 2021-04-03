@@ -1,8 +1,4 @@
-PARCEL=node_modules/.bin/parcel
-ELM_TEST=node_modules/.bin/elm-test
-ELM_ANALYSE=node_modules/.bin/elm-analyse
-
-.PHONY: dev check lint test test-watch
+.PHONY: clean dev check lint test test-watch
 
 .DEFAULT_GOAL:= dist
 
@@ -10,18 +6,18 @@ clean:
 	rm -rf .cache dist elm-stuff
 
 dist: clean
-	"${PARCEL}" build --no-source-maps src/index.html
+	npx parcel build --no-source-maps src/index.html
 
 dev:
-	"${PARCEL}" src/index.html
+	npx parcel src/index.html
 
 check: lint test
 
 lint:
-	"${ELM_ANALYSE}"
+	npx elm-analyse
 
 test:
-	"${ELM_TEST}"
+	npx elm-test
 
 test-watch:
-	"${ELM_TEST}" --watch
+	npx elm-test --watch

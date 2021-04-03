@@ -1,6 +1,8 @@
 {
   "dependencies": {
+    "@elm-tooling/elm-language-server": "^2.1.0",
     "elm": "^0.19.1-5",
+    "elm-analyse": "^0.16.5",
     "elm-hot": "^1.1.5",
     "elm-test": "^0.19.1-revision4",
     "node-elm-compiler": "^5.0.5",
