@@ -65,7 +65,14 @@ type alias Model =
     , textures : Textures
     , floor : Maybe Entity
     , npcs : List Npc
-    , dialog : List String
+    , dialog : Maybe Dialog
+    }
+
+
+type alias Dialog =
+    { text : String
+    , duration : Float
+    , queue : List String
     }
 
 
@@ -103,12 +110,12 @@ init _ =
             , textures = textures
             , floor = Nothing
             , npcs = npcs
-            , dialog = []
+            , dialog = Nothing
             }
 
         player =
             { entity = makeCube Color.lightBlue
-            , pos = Vector3d.meters 8 10 0
+            , pos = Vector3d.meters 5 11 0
             }
 
         textures =
@@ -311,11 +318,11 @@ keyEvent model =
         newDialog =
             if wasKeyPressed Keyboard.Spacebar model then
                 case model.dialog of
-                    [] ->
-                        findDialog model
+                    Nothing ->
+                        findNewDialog model
 
-                    _ ->
-                        List.drop 1 model.dialog
+                    Just d ->
+                        createDialog d.queue
 
             else
                 model.dialog
@@ -328,14 +335,24 @@ keyEvent model =
     ( newModel, Cmd.none )
 
 
-findDialog : Model -> List String
-findDialog model =
-    case findNpcToTalkWith model.player model.npcs of
-        Just npc ->
-            npc.dialog
+findNewDialog : Model -> Maybe Dialog
+findNewDialog model =
+    findNpcToTalkWith model.player model.npcs
+        |> Maybe.andThen (.dialog >> createDialog)
 
-        Nothing ->
-            []
+
+createDialog : List String -> Maybe Dialog
+createDialog texts =
+    case texts of
+        [] ->
+            Nothing
+
+        text :: queue ->
+            Just
+                { text = text
+                , duration = 0
+                , queue = queue
+                }
 
 
 findNpcToTalkWith : Player -> List Npc -> Maybe Npc
@@ -503,13 +520,13 @@ fpsView deltas =
         ]
 
 
-dialogView : List String -> Html msg
-dialogView dialog =
-    case dialog of
-        [] ->
+dialogView : Maybe Dialog -> Html msg
+dialogView maybeDialog =
+    case maybeDialog of
+        Nothing ->
             Html.div [] []
 
-        dialogText :: _ ->
+        Just dialog ->
             Html.div
                 [ HA.style "position" "absolute"
                 , HA.style "bottom" "5vmin"
@@ -519,8 +536,12 @@ dialogView dialog =
                 , HA.style "padding" "6vmin 6vmin"
                 , HA.style "background-color" "rgba(0, 0, 0, 75%)"
                 ]
-                [ Html.text dialogText
-                ]
+                [ dialogTextView dialog ]
+
+
+dialogTextView : Dialog -> Html msg
+dialogTextView dialog =
+    Html.text dialog.text
 
 
 fpsFromDeltas : List Float -> Float
