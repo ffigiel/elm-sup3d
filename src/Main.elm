@@ -531,7 +531,7 @@ dialogView maybeDialog =
             Html.div [] []
 
         Just dialog ->
-            Html.div
+            Html.p
                 [ HA.style "position" "absolute"
                 , HA.style "bottom" "5vmin"
                 , HA.style "font-size" "3vmin"
@@ -545,7 +545,26 @@ dialogView maybeDialog =
 
 dialogTextView : Dialog -> Html msg
 dialogTextView dialog =
-    Html.text dialog.text
+    let
+        charactersPerSecond =
+            10
+
+        visibleCharacters =
+            floor (dialog.duration * charactersPerSecond) // 1000
+
+        visibleText =
+            String.left visibleCharacters dialog.text
+
+        hiddenText =
+            String.dropLeft visibleCharacters dialog.text
+    in
+    Html.span []
+        [ Html.span []
+            [ Html.text visibleText ]
+        , Html.span
+            [ HA.style "opacity" "0" ]
+            [ Html.text hiddenText ]
+        ]
 
 
 fpsFromDeltas : List Float -> Float
