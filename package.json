@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "elm": "^0.19.1-5",
     "elm-hot": "^1.1.5",
     "elm-test": "^0.19.1-revision4",
     "node-elm-compiler": "^5.0.5",
