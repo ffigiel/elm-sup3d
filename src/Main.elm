@@ -1,6 +1,7 @@
 module Main exposing (main)
 
 import Angle exposing (Angle)
+import Axis3d
 import Browser
 import Browser.Dom
 import Browser.Events
@@ -88,6 +89,7 @@ type alias Player =
 type alias Npc =
     { entity : Entity
     , pos : Vector3d Length.Meters WorldCoordinates
+    , angle : Angle
     , dialog : List String
     , action : NpcAction
     , actionTimeLeft : Float
@@ -126,7 +128,7 @@ init _ =
 
         player =
             { entity = makeCube Color.lightBlue
-            , pos = Vector3d.meters 5 11 0
+            , pos = Vector3d.meters 8 8 0
             }
 
         textures =
@@ -137,6 +139,7 @@ init _ =
         npcs =
             [ { entity = makeCube Color.darkRed
               , pos = Vector3d.meters 4 12 0
+              , angle = Angle.degrees 0
               , dialog =
                     [ "Hey"
                     , "What's up?"
@@ -146,6 +149,7 @@ init _ =
               }
             , { entity = makeCube Color.purple
               , pos = Vector3d.meters 14 6 0
+              , angle = Angle.degrees 0
               , dialog =
                     [ "Sup"
                     ]
@@ -261,7 +265,20 @@ update msg model =
                     List.map
                         (\npc ->
                             if npc == actionNpc then
-                                { npc | action = action, actionTimeLeft = actionTimeLeft }
+                                let
+                                    newAngle =
+                                        case action of
+                                            NpcPacing angle ->
+                                                angle
+
+                                            _ ->
+                                                npc.angle
+                                in
+                                { npc
+                                    | action = action
+                                    , actionTimeLeft = actionTimeLeft
+                                    , angle = newAngle
+                                }
 
                             else
                                 npc
@@ -309,7 +326,7 @@ updateFloor model =
 playerSpeed : Float
 playerSpeed =
     -- meters per second
-    1
+    1.5
 
 
 gameTick : Float -> Model -> ( Model, Cmd Msg )
@@ -640,7 +657,13 @@ gameView model floor =
             model.player.entity |> Scene3d.translateBy model.player.pos
 
         npcs =
-            List.map (\n -> Scene3d.translateBy n.pos n.entity) model.npcs
+            List.map
+                (\n ->
+                    n.entity
+                        |> Scene3d.rotateAround Axis3d.z n.angle
+                        |> Scene3d.translateBy n.pos
+                )
+                model.npcs
 
         cameraPos =
             Point3d.translateBy model.player.pos Point3d.origin
