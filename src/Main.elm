@@ -17,6 +17,7 @@ import List.Extra as List
 import LuminousFlux
 import Pixels
 import Point3d
+import Random
 import Scene3d
 import Scene3d.Light as Light
 import Scene3d.Material as Material
@@ -36,6 +37,7 @@ type Msg
     | Resized
     | KeyPress Keyboard.Msg
     | GotTexture TextureId (Result WebGL.Texture.Error (Material.Texture Color))
+    | GotNpcAction Npc ( NpcAction, Float )
 
 
 type TextureId
@@ -253,6 +255,21 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
+        GotNpcAction actionNpc ( action, actionTimeLeft ) ->
+            let
+                newNpcs =
+                    List.map
+                        (\npc ->
+                            if npc == actionNpc then
+                                { npc | action = action, actionTimeLeft = actionTimeLeft }
+
+                            else
+                                npc
+                        )
+                        model.npcs
+            in
+            ( { model | npcs = newNpcs }, Cmd.none )
+
 
 updateDeltas : Float -> Model -> Model
 updateDeltas delta model =
@@ -319,8 +336,9 @@ gameTick d model =
         newPlayer =
             { player | pos = newPlayerPos }
 
-        newNpcs =
+        ( newNpcs, npcCmds ) =
             List.map (npcTick d) model.npcs
+                |> List.unzip
 
         newDialog =
             Maybe.map (\dialog -> { dialog | duration = dialog.duration + d }) model.dialog
@@ -331,38 +349,87 @@ gameTick d model =
                 , npcs = newNpcs
                 , dialog = newDialog
             }
+
+        cmd =
+            Cmd.batch npcCmds
     in
-    ( newModel |> updateDeltas d, Cmd.none )
+    ( newModel |> updateDeltas d, cmd )
 
 
-npcTick : Float -> Npc -> Npc
+npcTick : Float -> Npc -> ( Npc, Cmd Msg )
 npcTick d npc =
     case npc.action of
-        NpcWaiting ->
-            { npc | actionTimeLeft = npc.actionTimeLeft - d }
-
-        NpcPacing angle ->
-            let
-                dPos =
-                    Vector3d.rThetaOn
-                        SketchPlane3d.yx
-                        (Length.meters <| d * npcSpeed)
-                        angle
-
-                newPos =
-                    Vector3d.plus
-                        npc.pos
-                        dPos
-            in
-            { npc | pos = newPos, actionTimeLeft = npc.actionTimeLeft - d }
-
         NpcTalking _ ->
-            npc
+            ( npc, Cmd.none )
+
+        _ ->
+            npcTickAction d { npc | actionTimeLeft = npc.actionTimeLeft - d }
+
+
+npcTickAction : Float -> Npc -> ( Npc, Cmd Msg )
+npcTickAction d npc =
+    if npc.actionTimeLeft <= 0 then
+        ( npc, prepareNewNpcAction npc )
+
+    else
+        let
+            newNpc =
+                case npc.action of
+                    NpcWaiting ->
+                        npc
+
+                    NpcPacing angle ->
+                        let
+                            dPos =
+                                Vector3d.rThetaOn
+                                    SketchPlane3d.yx
+                                    (Length.meters <| d * npcSpeed)
+                                    angle
+
+                            newPos =
+                                Vector3d.plus
+                                    npc.pos
+                                    dPos
+                        in
+                        { npc | pos = newPos }
+
+                    NpcTalking _ ->
+                        -- This branch was handled elsewhere and should never be reached
+                        npc
+        in
+        ( newNpc, Cmd.none )
 
 
 npcSpeed : Float
 npcSpeed =
     0.5
+
+
+prepareNewNpcAction : Npc -> Cmd Msg
+prepareNewNpcAction npc =
+    Random.generate (GotNpcAction npc) genNpcAction
+
+
+genNpcAction : Random.Generator ( NpcAction, Float )
+genNpcAction =
+    Random.weighted
+        ( 2, genNpcWaiting )
+        [ ( 3, genNpcPacing ) ]
+        |> Random.andThen identity
+
+
+genNpcWaiting : Random.Generator ( NpcAction, Float )
+genNpcWaiting =
+    Random.map
+        (\duration -> ( NpcWaiting, duration ))
+        (Random.float 1 4)
+
+
+genNpcPacing : Random.Generator ( NpcAction, Float )
+genNpcPacing =
+    Random.map2 (\angle duration -> ( NpcPacing angle, duration ))
+        (Random.float 0 360 |> Random.map Angle.degrees)
+        (Random.float 1 3)
 
 
 keyEvent : Model -> ( Model, Cmd Msg )
@@ -398,10 +465,6 @@ findNewDialog model =
                     List.map
                         (\npc ->
                             if npc == npcTalking then
-                                let
-                                    _ =
-                                        Debug.log "found" "found"
-                                in
                                 { npc | action = NpcTalking npc.action }
 
                             else
