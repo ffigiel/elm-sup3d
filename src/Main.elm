@@ -326,7 +326,7 @@ keyEvent model =
                         findNewDialog model
 
                     Just d ->
-                        createDialog d.queue
+                        advanceDialog d
 
             else
                 model.dialog
@@ -343,6 +343,20 @@ findNewDialog : Model -> Maybe Dialog
 findNewDialog model =
     findNpcToTalkWith model.player model.npcs
         |> Maybe.andThen (.dialog >> createDialog)
+
+
+advanceDialog : Dialog -> Maybe Dialog
+advanceDialog dialog =
+    let
+        timeToShowAllText =
+            ((String.length dialog.text + 1) * 1000 // dialogCharactersPerSecond)
+                |> toFloat
+    in
+    if dialog.duration > timeToShowAllText then
+        createDialog dialog.queue
+
+    else
+        Just { dialog | duration = timeToShowAllText }
 
 
 createDialog : List String -> Maybe Dialog
@@ -546,17 +560,14 @@ dialogView maybeDialog =
 dialogTextView : Dialog -> Html msg
 dialogTextView dialog =
     let
-        charactersPerSecond =
-            10
-
-        visibleCharacters =
-            floor (dialog.duration * charactersPerSecond) // 1000
+        numCharacters =
+            round (dialog.duration * dialogCharactersPerSecond) // 1000
 
         visibleText =
-            String.left visibleCharacters dialog.text
+            String.left numCharacters dialog.text
 
         hiddenText =
-            String.dropLeft visibleCharacters dialog.text
+            String.dropLeft numCharacters dialog.text
     in
     Html.span []
         [ Html.span []
@@ -565,6 +576,11 @@ dialogTextView dialog =
             [ HA.style "opacity" "0" ]
             [ Html.text hiddenText ]
         ]
+
+
+dialogCharactersPerSecond : number
+dialogCharactersPerSecond =
+    10
 
 
 fpsFromDeltas : List Float -> Float
