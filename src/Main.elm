@@ -88,7 +88,7 @@ type alias Npc =
     , pos : Vector3d Length.Meters WorldCoordinates
     , dialog : List String
     , action : NpcAction
-    , actionMsLeft : Float
+    , actionTimeLeft : Float
     }
 
 
@@ -140,7 +140,7 @@ init _ =
                     , "What's up?"
                     ]
               , action = NpcPacing <| Angle.degrees 0
-              , actionMsLeft = 0
+              , actionTimeLeft = 0
               }
             , { entity = makeCube Color.purple
               , pos = Vector3d.meters 14 6 0
@@ -148,7 +148,7 @@ init _ =
                     [ "Sup"
                     ]
               , action = NpcWaiting
-              , actionMsLeft = 0
+              , actionTimeLeft = 0
               }
             ]
 
@@ -339,7 +339,7 @@ npcTick : Float -> Npc -> Npc
 npcTick d npc =
     case npc.action of
         NpcWaiting ->
-            npc
+            { npc | actionTimeLeft = npc.actionTimeLeft - d }
 
         NpcPacing angle ->
             let
@@ -354,7 +354,7 @@ npcTick d npc =
                         npc.pos
                         dPos
             in
-            { npc | pos = newPos }
+            { npc | pos = newPos, actionTimeLeft = npc.actionTimeLeft - d }
 
         NpcTalking _ ->
             npc
