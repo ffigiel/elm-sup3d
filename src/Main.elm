@@ -55,7 +55,7 @@ type alias Entity =
 
 
 type alias Model =
-    { time : Float
+    { time : Float -- in seconds
     , deltas : List Float
     , width : Int
     , height : Int
@@ -178,7 +178,7 @@ getViewport =
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
-        [ Browser.Events.onAnimationFrameDelta Tick
+        [ Browser.Events.onAnimationFrameDelta (\d -> Tick (d / 1000))
         , Sub.map KeyPress Keyboard.subscriptions
         , Browser.Events.onResize (\_ _ -> Resized)
         ]
@@ -276,13 +276,10 @@ updateFloor model =
             model
 
 
-
--- units per ms
-
-
 playerSpeed : Float
 playerSpeed =
-    1 / 1000
+    -- meters per second
+    1
 
 
 gameTick : Float -> Model -> ( Model, Cmd Msg )
@@ -353,15 +350,19 @@ findNewDialog model =
 advanceDialog : Dialog -> Maybe Dialog
 advanceDialog dialog =
     let
-        timeToShowAllText =
-            ((String.length dialog.text + 1) * 1000 // dialogCharactersPerSecond)
-                |> toFloat
+        minAdvanceDuration =
+            minDurationToAdvanceDialogText dialog.text
     in
-    if dialog.duration > timeToShowAllText then
+    if dialog.duration > minAdvanceDuration then
         createDialog dialog.queue
 
     else
-        Just { dialog | duration = timeToShowAllText }
+        Just { dialog | duration = minAdvanceDuration }
+
+
+minDurationToAdvanceDialogText : String -> Float
+minDurationToAdvanceDialogText text =
+    toFloat (String.length text + 1) / dialogCharactersPerSecond
 
 
 createDialog : List String -> Maybe Dialog
@@ -566,7 +567,7 @@ dialogTextView : Dialog -> Html msg
 dialogTextView dialog =
     let
         numCharacters =
-            round (dialog.duration * dialogCharactersPerSecond) // 1000
+            floor (dialog.duration * dialogCharactersPerSecond)
 
         visibleText =
             String.left numCharacters dialog.text
@@ -583,7 +584,7 @@ dialogTextView dialog =
         ]
 
 
-dialogCharactersPerSecond : number
+dialogCharactersPerSecond : Float
 dialogCharactersPerSecond =
     10
 
@@ -595,14 +596,14 @@ fpsFromDeltas deltas =
             0
 
         _ ->
-            1000 / (List.sum deltas / (List.length deltas |> toFloat))
+            1 / (List.sum deltas / (List.length deltas |> toFloat))
 
 
 getLights : Float -> Scene3d.Lights coordinates
 getLights t =
     let
         sunT =
-            t / 1000 / 60
+            t / 60
 
         sunDistance =
             100
