@@ -7,6 +7,7 @@ import Browser.Dom
 import Browser.Events
 import Camera3d
 import Color exposing (Color)
+import Dict exposing (Dict)
 import Direction3d
 import Html exposing (Html)
 import Html.Attributes as HA
@@ -38,7 +39,7 @@ type Msg
     | Resized
     | KeyPress Keyboard.Msg
     | GotTexture TextureId (Result WebGL.Texture.Error (Material.Texture Color))
-    | GotNpcAction Npc ( NpcAction, Float )
+    | GotNpcAction Int ( NpcAction, Float )
 
 
 type TextureId
@@ -68,7 +69,7 @@ type alias Model =
     , player : Player
     , textures : Textures
     , floor : Maybe Entity
-    , npcs : List Npc
+    , npcs : Dict Int Npc
     , dialog : Maybe Dialog
     }
 
@@ -87,7 +88,8 @@ type alias Player =
 
 
 type alias Npc =
-    { entity : Entity
+    { id : Int
+    , entity : Entity
     , pos : Vector3d Length.Meters WorldCoordinates
     , angle : Angle
     , dialog : List String
@@ -137,26 +139,29 @@ init _ =
             }
 
         npcs =
-            [ { entity = makeCube Color.darkRed
-              , pos = Vector3d.meters 4 12 0
-              , angle = Angle.degrees 0
-              , dialog =
-                    [ "Hey"
-                    , "What's up?"
-                    ]
-              , action = NpcPacing <| Angle.degrees 0
-              , actionTimeLeft = 0
-              }
-            , { entity = makeCube Color.purple
-              , pos = Vector3d.meters 14 6 0
-              , angle = Angle.degrees 0
-              , dialog =
-                    [ "Sup"
-                    ]
-              , action = NpcWaiting
-              , actionTimeLeft = 0
-              }
-            ]
+            npcsFromValues
+                [ { id = 0
+                  , entity = makeCube Color.darkRed
+                  , pos = Vector3d.meters 4 12 0
+                  , angle = Angle.degrees 0
+                  , dialog =
+                        [ "Hey"
+                        , "What's up?"
+                        ]
+                  , action = NpcPacing <| Angle.degrees 0
+                  , actionTimeLeft = 0
+                  }
+                , { id = 1
+                  , entity = makeCube Color.purple
+                  , pos = Vector3d.meters 14 6 0
+                  , angle = Angle.degrees 0
+                  , dialog =
+                        [ "Sup"
+                        ]
+                  , action = NpcWaiting
+                  , actionTimeLeft = 0
+                  }
+                ]
 
         cmd : Cmd Msg
         cmd =
@@ -171,6 +176,13 @@ init _ =
                 ]
     in
     ( model, cmd )
+
+
+npcsFromValues : List Npc -> Dict Int Npc
+npcsFromValues npcList =
+    npcList
+        |> List.map (\n -> ( n.id, n ))
+        |> Dict.fromList
 
 
 main : Program () Model Msg
@@ -259,12 +271,13 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        GotNpcAction actionNpc ( action, actionTimeLeft ) ->
+        GotNpcAction npcId ( action, actionTimeLeft ) ->
             let
                 newNpcs =
-                    List.map
-                        (\npc ->
-                            if npc == actionNpc then
+                    Dict.update
+                        npcId
+                        (Maybe.map
+                            (\npc ->
                                 let
                                     newAngle =
                                         case action of
@@ -279,9 +292,7 @@ update msg model =
                                     , actionTimeLeft = actionTimeLeft
                                     , angle = newAngle
                                 }
-
-                            else
-                                npc
+                            )
                         )
                         model.npcs
             in
@@ -354,8 +365,7 @@ gameTick d model =
             { player | pos = newPlayerPos }
 
         ( newNpcs, npcCmds ) =
-            List.map (npcTick d) model.npcs
-                |> List.unzip
+            npcsTick d model.npcs
 
         newDialog =
             Maybe.map (\dialog -> { dialog | duration = dialog.duration + d }) model.dialog
@@ -371,6 +381,17 @@ gameTick d model =
             Cmd.batch npcCmds
     in
     ( newModel |> updateDeltas d, cmd )
+
+
+npcsTick : Float -> Dict Int Npc -> ( Dict Int Npc, List (Cmd Msg) )
+npcsTick d npcs =
+    let
+        ( npcValues, cmds ) =
+            Dict.values npcs
+                |> List.map (npcTick d)
+                |> List.unzip
+    in
+    ( npcsFromValues npcValues, cmds )
 
 
 npcTick : Float -> Npc -> ( Npc, Cmd Msg )
@@ -426,7 +447,7 @@ npcSpeed =
 
 prepareNewNpcAction : Npc -> Cmd Msg
 prepareNewNpcAction npc =
-    Random.generate (GotNpcAction npc) genNpcAction
+    Random.generate (GotNpcAction npc.id) genNpcAction
 
 
 genNpcAction : Random.Generator ( NpcAction, Float )
@@ -475,19 +496,18 @@ keyEvent model =
     ( newModel, Cmd.none )
 
 
-findNewDialog : Model -> ( Maybe Dialog, List Npc )
+findNewDialog : Model -> ( Maybe Dialog, Dict Int Npc )
 findNewDialog model =
     case findNpcToTalkWith model.player model.npcs of
         Just npcTalking ->
             let
                 newNpcs =
-                    List.map
-                        (\npc ->
-                            if npc == npcTalking then
+                    Dict.update
+                        npcTalking.id
+                        (Maybe.map
+                            (\npc ->
                                 { npc | action = NpcTalking npc.action }
-
-                            else
-                                npc
+                            )
                         )
                         model.npcs
             in
@@ -497,7 +517,7 @@ findNewDialog model =
             ( Nothing, model.npcs )
 
 
-advanceDialog : Dialog -> List Npc -> ( Maybe Dialog, List Npc )
+advanceDialog : Dialog -> Dict Int Npc -> ( Maybe Dialog, Dict Int Npc )
 advanceDialog dialog npcs =
     let
         minAdvanceDuration =
@@ -505,7 +525,7 @@ advanceDialog dialog npcs =
     in
     if dialog.duration > minAdvanceDuration then
         if dialog.queue == [] then
-            ( Nothing, List.map stopNpcTalking npcs )
+            ( Nothing, Dict.map stopNpcTalking npcs )
 
         else
             ( createDialog dialog.queue, npcs )
@@ -514,8 +534,8 @@ advanceDialog dialog npcs =
         ( Just { dialog | duration = minAdvanceDuration }, npcs )
 
 
-stopNpcTalking : Npc -> Npc
-stopNpcTalking npc =
+stopNpcTalking : Int -> Npc -> Npc
+stopNpcTalking _ npc =
     case npc.action of
         NpcTalking a ->
             { npc | action = a }
@@ -543,9 +563,11 @@ createDialog texts =
                 }
 
 
-findNpcToTalkWith : Player -> List Npc -> Maybe Npc
+findNpcToTalkWith : Player -> Dict Int Npc -> Maybe Npc
 findNpcToTalkWith player npcs =
-    List.find (\npc -> isNearby player.pos npc.pos) npcs
+    npcs
+        |> Dict.values
+        |> List.find (\npc -> isNearby player.pos npc.pos)
 
 
 isNearby :
@@ -659,13 +681,14 @@ gameView model floor =
             model.player.entity |> Scene3d.translateBy model.player.pos
 
         npcs =
-            List.map
-                (\n ->
-                    n.entity
-                        |> Scene3d.rotateAround Axis3d.z n.angle
-                        |> Scene3d.translateBy n.pos
-                )
-                model.npcs
+            model.npcs
+                |> Dict.values
+                |> List.map
+                    (\n ->
+                        n.entity
+                            |> Scene3d.rotateAround Axis3d.z n.angle
+                            |> Scene3d.translateBy n.pos
+                    )
 
         cameraPos =
             Point3d.translateBy model.player.pos Point3d.origin
