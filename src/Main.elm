@@ -1,6 +1,6 @@
 module Main exposing (main)
 
-import Angle
+import Angle exposing (Angle)
 import Browser
 import Browser.Dom
 import Browser.Events
@@ -22,6 +22,7 @@ import Scene3d.Light as Light
 import Scene3d.Material as Material
 import Scene3d.Mesh as Mesh
 import Set
+import SketchPlane3d
 import Task
 import TriangularMesh
 import Vector3d exposing (Vector3d)
@@ -86,7 +87,15 @@ type alias Npc =
     { entity : Entity
     , pos : Vector3d Length.Meters WorldCoordinates
     , dialog : List String
+    , action : NpcAction
+    , actionMsLeft : Float
     }
+
+
+type NpcAction
+    = NpcWaiting
+    | NpcPacing Angle
+    | NpcTalking NpcAction
 
 
 type alias Textures =
@@ -130,12 +139,16 @@ init _ =
                     [ "Hey"
                     , "What's up?"
                     ]
+              , action = NpcPacing <| Angle.degrees 0
+              , actionMsLeft = 0
               }
             , { entity = makeCube Color.purple
               , pos = Vector3d.meters 14 6 0
               , dialog =
                     [ "Sup"
                     ]
+              , action = NpcWaiting
+              , actionMsLeft = 0
               }
             ]
 
@@ -306,16 +319,50 @@ gameTick d model =
         newPlayer =
             { player | pos = newPlayerPos }
 
+        newNpcs =
+            List.map (npcTick d) model.npcs
+
         newDialog =
             Maybe.map (\dialog -> { dialog | duration = dialog.duration + d }) model.dialog
 
         newModel =
             { model
                 | player = newPlayer
+                , npcs = newNpcs
                 , dialog = newDialog
             }
     in
     ( newModel |> updateDeltas d, Cmd.none )
+
+
+npcTick : Float -> Npc -> Npc
+npcTick d npc =
+    case npc.action of
+        NpcWaiting ->
+            npc
+
+        NpcPacing angle ->
+            let
+                dPos =
+                    Vector3d.rThetaOn
+                        SketchPlane3d.yx
+                        (Length.meters <| d * npcSpeed)
+                        angle
+
+                newPos =
+                    Vector3d.plus
+                        npc.pos
+                        dPos
+            in
+            { npc | pos = newPos }
+
+        NpcTalking _ ->
+            npc
+
+
+npcSpeed : Float
+npcSpeed =
+    0.5
 
 
 keyEvent : Model -> ( Model, Cmd Msg )
