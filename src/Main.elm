@@ -78,6 +78,7 @@ type alias Dialog =
     { text : String
     , duration : Float
     , queue : List String
+    , talkingNpcId : Int
     }
 
 
@@ -499,11 +500,11 @@ keyEvent model =
 findNewDialog : Model -> ( Maybe Dialog, Dict Int Npc )
 findNewDialog model =
     case findNpcToTalkWith model.player model.npcs of
-        Just npcTalking ->
+        Just talkingNpc ->
             let
                 newNpcs =
                     Dict.update
-                        npcTalking.id
+                        talkingNpc.id
                         (Maybe.map
                             (\npc ->
                                 { npc | action = NpcTalking npc.action }
@@ -511,7 +512,7 @@ findNewDialog model =
                         )
                         model.npcs
             in
-            ( createDialog npcTalking.dialog, newNpcs )
+            ( createDialog talkingNpc.dialog talkingNpc.id, newNpcs )
 
         Nothing ->
             ( Nothing, model.npcs )
@@ -525,23 +526,30 @@ advanceDialog dialog npcs =
     in
     if dialog.duration > minAdvanceDuration then
         if dialog.queue == [] then
-            ( Nothing, Dict.map stopNpcTalking npcs )
+            ( Nothing, stopNpcTalking dialog.talkingNpcId npcs )
 
         else
-            ( createDialog dialog.queue, npcs )
+            ( createDialog dialog.queue dialog.talkingNpcId, npcs )
 
     else
         ( Just { dialog | duration = minAdvanceDuration }, npcs )
 
 
-stopNpcTalking : Int -> Npc -> Npc
-stopNpcTalking _ npc =
-    case npc.action of
-        NpcTalking a ->
-            { npc | action = a }
+stopNpcTalking : Int -> Dict Int Npc -> Dict Int Npc
+stopNpcTalking npcId npcs =
+    Dict.update
+        npcId
+        (Maybe.map
+            (\npc ->
+                case npc.action of
+                    NpcTalking a ->
+                        { npc | action = a }
 
-        _ ->
-            npc
+                    _ ->
+                        npc
+            )
+        )
+        npcs
 
 
 minDurationToAdvanceDialogText : String -> Float
@@ -549,8 +557,8 @@ minDurationToAdvanceDialogText text =
     toFloat (String.length text + 1) / dialogCharactersPerSecond
 
 
-createDialog : List String -> Maybe Dialog
-createDialog texts =
+createDialog : List String -> Int -> Maybe Dialog
+createDialog texts npcId =
     case texts of
         [] ->
             Nothing
@@ -560,6 +568,7 @@ createDialog texts =
                 { text = text
                 , duration = 0
                 , queue = queue
+                , talkingNpcId = npcId
                 }
 
 
