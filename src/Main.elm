@@ -401,7 +401,9 @@ npcTickAction d npc =
                                 Vector3d.rThetaOn
                                     SketchPlane3d.yx
                                     (Length.meters <| d * npcSpeed)
-                                    angle
+                                    -- it seems Vector3d.rThetaOn and Scene3d.rotateAround go in
+                                    -- opposite directions, so we need to flip the sign
+                                    (Angle.inDegrees angle |> (*) -1 |> Angle.degrees)
 
                             newPos =
                                 Vector3d.plus
