@@ -368,43 +368,78 @@ npcSpeed =
 keyEvent : Model -> ( Model, Cmd Msg )
 keyEvent model =
     let
-        newDialog =
+        ( newDialog, newNpcs ) =
             if wasKeyPressed Keyboard.Spacebar model then
                 case model.dialog of
                     Nothing ->
                         findNewDialog model
 
                     Just d ->
-                        advanceDialog d
+                        advanceDialog d model.npcs
 
             else
-                model.dialog
+                ( model.dialog, model.npcs )
 
         newModel =
             { model
-                | dialog = newDialog
+                | npcs = newNpcs
+                , dialog = newDialog
             }
     in
     ( newModel, Cmd.none )
 
 
-findNewDialog : Model -> Maybe Dialog
+findNewDialog : Model -> ( Maybe Dialog, List Npc )
 findNewDialog model =
-    findNpcToTalkWith model.player model.npcs
-        |> Maybe.andThen (.dialog >> createDialog)
+    case findNpcToTalkWith model.player model.npcs of
+        Just npcTalking ->
+            let
+                newNpcs =
+                    List.map
+                        (\npc ->
+                            if npc == npcTalking then
+                                let
+                                    _ =
+                                        Debug.log "found" "found"
+                                in
+                                { npc | action = NpcTalking npc.action }
+
+                            else
+                                npc
+                        )
+                        model.npcs
+            in
+            ( createDialog npcTalking.dialog, newNpcs )
+
+        Nothing ->
+            ( Nothing, model.npcs )
 
 
-advanceDialog : Dialog -> Maybe Dialog
-advanceDialog dialog =
+advanceDialog : Dialog -> List Npc -> ( Maybe Dialog, List Npc )
+advanceDialog dialog npcs =
     let
         minAdvanceDuration =
             minDurationToAdvanceDialogText dialog.text
     in
     if dialog.duration > minAdvanceDuration then
-        createDialog dialog.queue
+        if dialog.queue == [] then
+            ( Nothing, List.map stopNpcTalking npcs )
+
+        else
+            ( createDialog dialog.queue, npcs )
 
     else
-        Just { dialog | duration = minAdvanceDuration }
+        ( Just { dialog | duration = minAdvanceDuration }, npcs )
+
+
+stopNpcTalking : Npc -> Npc
+stopNpcTalking npc =
+    case npc.action of
+        NpcTalking a ->
+            { npc | action = a }
+
+        _ ->
+            npc
 
 
 minDurationToAdvanceDialogText : String -> Float
