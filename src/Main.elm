@@ -295,11 +295,16 @@ gameTick d model =
             model.player
 
         newPlayerPos =
-            Vector3d.plus player.pos <|
-                Vector3d.meters
-                    (toFloat arrows.x * d * playerSpeed)
-                    (toFloat arrows.y * d * playerSpeed)
-                    0
+            case model.dialog of
+                Nothing ->
+                    Vector3d.plus player.pos <|
+                        Vector3d.meters
+                            (toFloat arrows.x * d * playerSpeed)
+                            (toFloat arrows.y * d * playerSpeed)
+                            0
+
+                _ ->
+                    player.pos
 
         newPlayer =
             { player | pos = newPlayerPos }
