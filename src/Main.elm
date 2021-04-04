@@ -759,6 +759,14 @@ getLights t =
     Scene3d.twoLights sunOrMoon softLighting
 
 
+
+-- Generating the map
+
+
+type alias List2d a =
+    List (List a)
+
+
 getFloor :
     Texture
     -> Texture
@@ -806,7 +814,7 @@ getFloor grassTx waterTx =
     Scene3d.group texturedTiles
 
 
-getMapsForTextures : List (List Int) -> List ( Int, List (List Bool) )
+getMapsForTextures : List2d Int -> List ( Int, List2d Bool )
 getMapsForTextures map =
     let
         allTextures =
@@ -818,7 +826,7 @@ getMapsForTextures map =
     List.map (getMapForTexture map) allTextures
 
 
-getMapForTexture : List (List Int) -> Int -> ( Int, List (List Bool) )
+getMapForTexture : List2d Int -> Int -> ( Int, List2d Bool )
 getMapForTexture map id =
     let
         processRow =
@@ -827,7 +835,7 @@ getMapForTexture map id =
     ( id, List.map processRow map )
 
 
-mapAndTextureToEntity : (Int -> Texture) -> ( Int, List (List Bool) ) -> Entity
+mapAndTextureToEntity : (Int -> Texture) -> ( Int, List2d Bool ) -> Entity
 mapAndTextureToEntity textureFromId ( id, map ) =
     let
         tx =
