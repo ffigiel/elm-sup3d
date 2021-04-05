@@ -76,7 +76,8 @@ type alias Model =
 
 
 type alias Dialog =
-    { text : String
+    { title : String
+    , text : String
     , duration : Float
     , queue : List String
     , talkingNpcId : Int
@@ -91,6 +92,7 @@ type alias Player =
 
 type alias Npc =
     { id : Int
+    , name : String
     , entity : Entity
     , pos : Vector3d Length.Meters WorldCoordinates
     , angle : Angle
@@ -143,19 +145,21 @@ init _ =
             }
 
         npc1 =
-            { color = Color.darkRed
+            { name = "Viola"
+            , color = Color.purple
             , pos = Vector3d.meters 4 12 0
             , dialog =
-                [ "Hey"
+                [ "Hey!"
                 , "What's up?"
                 ]
             }
 
         npc2 =
-            { color = Color.purple
+            { name = "Redd"
+            , color = Color.darkRed
             , pos = Vector3d.meters 14 6 0
             , dialog =
-                [ "Sup"
+                [ "Sup."
                 ]
             }
 
@@ -179,21 +183,23 @@ init _ =
 
 
 addNpc :
-    { color : Color
+    { name : String
+    , color : Color
     , pos : Vector3d Length.Meters WorldCoordinates
     , dialog : List String
     }
     -> Model
     -> Model
-addNpc { color, pos, dialog } model =
+addNpc { name, color, pos, dialog } model =
     let
         npc =
             { id = model.nextNpcId
+            , name = name
             , entity = makeCube color
             , pos = pos
             , dialog = dialog
-            , angle = Angle.degrees 0
-            , targetAngle = Angle.degrees 0
+            , angle = Angle.degrees 90
+            , targetAngle = Angle.degrees 90
             , action = NpcWaiting
             , actionTimeLeft = 0
             }
@@ -561,8 +567,15 @@ findNewDialog model =
                             )
                         )
                         model.npcs
+
+                dialog =
+                    createDialog
+                        { title = talkingNpc.name
+                        , texts = talkingNpc.dialog
+                        , talkingNpcId = talkingNpc.id
+                        }
             in
-            ( createDialog talkingNpc.dialog talkingNpc.id, newNpcs )
+            ( dialog, newNpcs )
 
         Nothing ->
             ( Nothing, model.npcs )
@@ -579,7 +592,13 @@ advanceDialog dialog npcs =
             ( Nothing, stopNpcTalking dialog.talkingNpcId npcs )
 
         else
-            ( createDialog dialog.queue dialog.talkingNpcId, npcs )
+            ( createDialog
+                { title = dialog.title
+                , texts = dialog.queue
+                , talkingNpcId = dialog.talkingNpcId
+                }
+            , npcs
+            )
 
     else
         ( Just { dialog | duration = minAdvanceDuration }, npcs )
@@ -607,18 +626,24 @@ minDurationToAdvanceDialogText text =
     toFloat (String.length text + 1) / dialogCharactersPerSecond
 
 
-createDialog : List String -> Int -> Maybe Dialog
-createDialog texts npcId =
+createDialog :
+    { title : String
+    , texts : List String
+    , talkingNpcId : Int
+    }
+    -> Maybe Dialog
+createDialog { title, texts, talkingNpcId } =
     case texts of
         [] ->
             Nothing
 
         text :: queue ->
             Just
-                { text = text
+                { title = title
+                , text = text
                 , duration = 0
                 , queue = queue
-                , talkingNpcId = npcId
+                , talkingNpcId = talkingNpcId
                 }
 
 
@@ -788,6 +813,7 @@ fpsView deltas =
     Html.p
         [ HA.style "position" "absolute"
         , HA.style "text-shadow" "0 0 1px black"
+        , HA.style "font-size" "2vmin"
         ]
         [ fpsFromDeltas deltas
             |> round
@@ -803,16 +829,32 @@ dialogView maybeDialog =
             Html.div [] []
 
         Just dialog ->
-            Html.p
+            Html.div
                 [ HA.style "position" "absolute"
                 , HA.style "bottom" "5vmin"
-                , HA.style "font-size" "3vmin"
-                , HA.style "left" "50vmin"
-                , HA.style "right" "50vmin"
-                , HA.style "padding" "6vmin 6vmin"
-                , HA.style "background-color" "rgba(0, 0, 0, 75%)"
+                , HA.style "left" "5vmin"
+                , HA.style "right" "5vmin"
                 ]
-                [ dialogTextView dialog ]
+                [ Html.div
+                    [ HA.style "padding" "5vmin"
+                    , HA.style "margin-left" "auto"
+                    , HA.style "margin-right" "auto"
+                    , HA.style "width" "80vmin"
+                    , HA.style "background-color" "rgba(0, 0, 0, 75%)"
+                    ]
+                    [ dialogTitleView dialog
+                    , dialogTextView dialog
+                    ]
+                ]
+
+
+dialogTitleView : Dialog -> Html msg
+dialogTitleView dialog =
+    Html.p
+        [ HA.style "font-weight" "bold"
+        , HA.style "color" "#999"
+        ]
+        [ Html.text dialog.title ]
 
 
 dialogTextView : Dialog -> Html msg
@@ -827,7 +869,7 @@ dialogTextView dialog =
         hiddenText =
             String.dropLeft numCharacters dialog.text
     in
-    Html.span []
+    Html.p []
         [ Html.span []
             [ Html.text visibleText ]
         , Html.span
