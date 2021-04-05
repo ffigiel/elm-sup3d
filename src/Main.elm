@@ -838,7 +838,7 @@ dialogTextView dialog =
 
 dialogCharactersPerSecond : Float
 dialogCharactersPerSecond =
-    10
+    40
 
 
 fpsFromDeltas : List Float -> Float
