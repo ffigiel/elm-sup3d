@@ -1018,8 +1018,12 @@ mapAndTextureToEntity textureFromId ( id, map ) =
             else
                 Nothing
 
+        yMax =
+            List.length map
+
         coords2dRow y =
-            List.indexedMap (coords2dCell y)
+            -- reverse the y coord to adjust it to world coords
+            List.indexedMap (coords2dCell (yMax - y))
 
         z =
             if id == 0 then
