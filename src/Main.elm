@@ -33,6 +33,10 @@ import Viewpoint3d
 import WebGL.Texture
 
 
+
+-- TYPES
+
+
 type Msg
     = Tick Float
     | GotViewport Int Int
@@ -113,6 +117,28 @@ type alias Textures =
     { grass : Maybe (Material.Texture Color)
     , water : Maybe (Material.Texture Color)
     }
+
+
+type alias List2d a =
+    List (List a)
+
+
+
+-- MAIN
+
+
+main : Program () Model Msg
+main =
+    Browser.element
+        { init = init
+        , view = view
+        , subscriptions = subscriptions
+        , update = update
+        }
+
+
+
+-- INIT
 
 
 init : flags -> ( Model, Cmd Msg )
@@ -210,23 +236,6 @@ addNpc { name, color, pos, dialog } model =
     }
 
 
-npcsFromValues : List Npc -> Dict Int Npc
-npcsFromValues npcList =
-    npcList
-        |> List.map (\n -> ( n.id, n ))
-        |> Dict.fromList
-
-
-main : Program () Model Msg
-main =
-    Browser.element
-        { init = init
-        , view = view
-        , subscriptions = subscriptions
-        , update = update
-        }
-
-
 getViewport : Cmd Msg
 getViewport =
     Task.perform
@@ -235,7 +244,7 @@ getViewport =
 
 
 
--- UPDATE
+-- SUBSCRIPTIONS
 
 
 subscriptions : Model -> Sub Msg
@@ -245,6 +254,10 @@ subscriptions _ =
         , Sub.map KeyPress Keyboard.subscriptions
         , Browser.Events.onResize (\_ _ -> Resized)
         ]
+
+
+
+-- UPDATE
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -354,29 +367,27 @@ updateDeltas delta model =
     { model | deltas = newDeltas }
 
 
-
--- update floor checks if all necessary textures are ready and creates the floor
-
-
 updateFloor : Model -> Model
 updateFloor model =
+    -- updateFloor checks if all necessary textures are ready and creates the floor
     case ( model.floor, model.textures.grass, model.textures.water ) of
         ( Nothing, Just grassTx, Just waterTx ) ->
-            { model | floor = Just <| getFloor grassTx waterTx }
+            { model | floor = Just <| makeFloor grassTx waterTx }
 
         _ ->
             model
 
 
-playerSpeed : Float
-playerSpeed =
-    -- meters per second
-    1.5
+
+-- TICK
 
 
 gameTick : Float -> Model -> ( Model, Cmd Msg )
 gameTick d model =
     let
+        playerSpeed =
+            1.5
+
         arrows =
             Keyboard.Arrows.arrows model.pressedKeys
 
@@ -424,8 +435,13 @@ npcsTick d npcs =
             Dict.values npcs
                 |> List.map (npcTick d)
                 |> List.unzip
+
+        newNpcs =
+            npcValues
+                |> List.map (\n -> ( n.id, n ))
+                |> Dict.fromList
     in
-    ( npcsFromValues npcValues, cmds )
+    ( newNpcs, cmds )
 
 
 npcTick : Float -> Npc -> ( Npc, Cmd Msg )
@@ -477,6 +493,9 @@ npcTickAction d npc =
 
                     NpcPacing _ ->
                         let
+                            npcSpeed =
+                                0.5
+
                             dPos =
                                 Vector3d.rThetaOn
                                     SketchPlane3d.xy
@@ -495,11 +514,6 @@ npcTickAction d npc =
                         npc
         in
         ( newNpc, Cmd.none )
-
-
-npcSpeed : Float
-npcSpeed =
-    0.5
 
 
 prepareNewNpcAction : Npc -> Cmd Msg
@@ -527,6 +541,10 @@ genNpcPacing =
     Random.map2 (\angle duration -> ( NpcPacing angle, duration ))
         (Random.float -60 60 |> Random.map Angle.degrees)
         (Random.float 1 3)
+
+
+
+-- EVENTS
 
 
 keyEvent : Model -> ( Model, Cmd Msg )
@@ -677,6 +695,10 @@ wasKeyPressed key model =
     model.keyChange == Just (Keyboard.KeyDown key)
 
 
+
+-- ENTITIES
+
+
 makeCube : Color -> Entity
 makeCube color =
     let
@@ -741,6 +763,127 @@ makeCube color =
         |> Scene3d.translateBy (Vector3d.meters 0 0 0.5)
 
 
+makeFloor :
+    Texture
+    -> Texture
+    -> Entity
+makeFloor grassTx waterTx =
+    let
+        ( g, w ) =
+            ( 0, 1 )
+
+        textureFromId id =
+            if id == g then
+                grassTx
+
+            else if id == w then
+                waterTx
+
+            else
+                grassTx
+
+        map =
+            [ [ g, g, g, g, g, g, g, g, g, g, g, g, w, w, w, g ]
+            , [ g, g, g, g, g, g, g, g, g, g, w, w, w, w, w, w ]
+            , [ g, g, g, g, g, g, g, g, w, w, w, g, g, g, g, g ]
+            , [ g, g, g, g, g, w, w, w, w, g, g, g, g, g, g, g ]
+            , [ g, g, g, w, w, w, w, g, g, g, g, g, g, g, g, g ]
+            , [ g, g, g, g, g, g, w, w, w, g, g, g, g, g, g, g ]
+            , [ g, g, g, g, g, g, g, w, w, w, w, g, g, g, g, g ]
+            , [ g, g, g, g, g, g, g, g, w, w, w, w, w, g, g, g ]
+            , [ g, g, g, g, g, g, g, g, g, g, w, w, w, w, g, g ]
+            , [ g, g, g, g, g, g, g, g, g, g, g, w, w, w, g, g ]
+            , [ g, g, g, g, g, g, g, g, g, g, g, g, w, w, w, g ]
+            , [ g, g, g, g, g, g, g, g, g, g, g, g, g, w, w, g ]
+            , [ g, g, g, g, g, g, g, g, g, g, g, g, g, w, w, w ]
+            , [ g, g, g, g, g, g, g, g, g, g, g, g, g, g, w, w ]
+            , [ g, g, g, g, g, g, g, g, g, g, g, g, g, w, w, w ]
+            , [ g, g, g, g, g, g, g, g, g, g, g, g, w, w, w, w ]
+            ]
+
+        mapsForTextures =
+            getMapsForTextures map
+
+        texturedTiles =
+            List.map (mapAndTextureToEntity textureFromId) mapsForTextures
+    in
+    Scene3d.group texturedTiles
+
+
+getMapsForTextures : List2d Int -> List ( Int, List2d Bool )
+getMapsForTextures map =
+    let
+        allTextures =
+            map
+                |> List.concat
+                |> Set.fromList
+                |> Set.toList
+    in
+    List.map (getMapForTexture map) allTextures
+
+
+getMapForTexture : List2d Int -> Int -> ( Int, List2d Bool )
+getMapForTexture map id =
+    let
+        processRow =
+            List.map ((==) id)
+    in
+    ( id, List.map processRow map )
+
+
+mapAndTextureToEntity : (Int -> Texture) -> ( Int, List2d Bool ) -> Entity
+mapAndTextureToEntity textureFromId ( id, map ) =
+    let
+        tx =
+            textureFromId id
+
+        coords2dCell y x paint =
+            if paint then
+                Just ( toFloat x, toFloat y )
+
+            else
+                Nothing
+
+        yMax =
+            List.length map
+
+        coords2dRow y =
+            -- reverse the y coord to adjust it to world coords
+            List.indexedMap (coords2dCell (yMax - y))
+
+        z =
+            if id == 0 then
+                0
+
+            else
+                -0.05
+
+        toTexturedFacets ( x, y ) =
+            [ ( { position = Point3d.meters x y z, uv = ( 0, 0 ) }
+              , { position = Point3d.meters (x + 1) y z, uv = ( 1, 0 ) }
+              , { position = Point3d.meters x (y + 1) z, uv = ( 0, 1 ) }
+              )
+            , ( { position = Point3d.meters x (y + 1) z, uv = ( 0, 1 ) }
+              , { position = Point3d.meters (x + 1) (y + 1) z, uv = ( 1, 1 ) }
+              , { position = Point3d.meters (x + 1) y z, uv = ( 1, 0 ) }
+              )
+            ]
+
+        mesh =
+            map
+                |> List.indexedMap coords2dRow
+                |> List.concat
+                |> List.filterMap (Maybe.map toTexturedFacets)
+                |> List.concat
+                |> TriangularMesh.triangles
+                |> Mesh.texturedFacets
+
+        material =
+            Material.texturedMatte tx
+    in
+    Scene3d.mesh material mesh
+
+
 
 -- VIEW
 
@@ -755,10 +898,7 @@ view model =
             Html.p [] [ Html.text "Loading" ]
 
 
-gameView :
-    Model
-    -> Entity
-    -> Html msg
+gameView : Model -> Entity -> Html msg
 gameView model floor =
     let
         player =
@@ -969,132 +1109,3 @@ getLights t =
                 }
     in
     Scene3d.twoLights sunOrMoon softLighting
-
-
-
--- Generating the map
-
-
-type alias List2d a =
-    List (List a)
-
-
-getFloor :
-    Texture
-    -> Texture
-    -> Entity
-getFloor grassTx waterTx =
-    let
-        ( g, w ) =
-            ( 0, 1 )
-
-        textureFromId id =
-            if id == g then
-                grassTx
-
-            else if id == w then
-                waterTx
-
-            else
-                grassTx
-
-        map =
-            [ [ g, g, g, g, g, g, g, g, g, g, g, g, w, w, w, g ]
-            , [ g, g, g, g, g, g, g, g, g, g, w, w, w, w, w, w ]
-            , [ g, g, g, g, g, g, g, g, w, w, w, g, g, g, g, g ]
-            , [ g, g, g, g, g, w, w, w, w, g, g, g, g, g, g, g ]
-            , [ g, g, g, w, w, w, w, g, g, g, g, g, g, g, g, g ]
-            , [ g, g, g, g, g, g, w, w, w, g, g, g, g, g, g, g ]
-            , [ g, g, g, g, g, g, g, w, w, w, w, g, g, g, g, g ]
-            , [ g, g, g, g, g, g, g, g, w, w, w, w, w, g, g, g ]
-            , [ g, g, g, g, g, g, g, g, g, g, w, w, w, w, g, g ]
-            , [ g, g, g, g, g, g, g, g, g, g, g, w, w, w, g, g ]
-            , [ g, g, g, g, g, g, g, g, g, g, g, g, w, w, w, g ]
-            , [ g, g, g, g, g, g, g, g, g, g, g, g, g, w, w, g ]
-            , [ g, g, g, g, g, g, g, g, g, g, g, g, g, w, w, w ]
-            , [ g, g, g, g, g, g, g, g, g, g, g, g, g, g, w, w ]
-            , [ g, g, g, g, g, g, g, g, g, g, g, g, g, w, w, w ]
-            , [ g, g, g, g, g, g, g, g, g, g, g, g, w, w, w, w ]
-            ]
-
-        mapsForTextures =
-            getMapsForTextures map
-
-        texturedTiles =
-            List.map (mapAndTextureToEntity textureFromId) mapsForTextures
-    in
-    Scene3d.group texturedTiles
-
-
-getMapsForTextures : List2d Int -> List ( Int, List2d Bool )
-getMapsForTextures map =
-    let
-        allTextures =
-            map
-                |> List.concat
-                |> Set.fromList
-                |> Set.toList
-    in
-    List.map (getMapForTexture map) allTextures
-
-
-getMapForTexture : List2d Int -> Int -> ( Int, List2d Bool )
-getMapForTexture map id =
-    let
-        processRow =
-            List.map ((==) id)
-    in
-    ( id, List.map processRow map )
-
-
-mapAndTextureToEntity : (Int -> Texture) -> ( Int, List2d Bool ) -> Entity
-mapAndTextureToEntity textureFromId ( id, map ) =
-    let
-        tx =
-            textureFromId id
-
-        coords2dCell y x paint =
-            if paint then
-                Just ( toFloat x, toFloat y )
-
-            else
-                Nothing
-
-        yMax =
-            List.length map
-
-        coords2dRow y =
-            -- reverse the y coord to adjust it to world coords
-            List.indexedMap (coords2dCell (yMax - y))
-
-        z =
-            if id == 0 then
-                0
-
-            else
-                -0.05
-
-        toTexturedFacets ( x, y ) =
-            [ ( { position = Point3d.meters x y z, uv = ( 0, 0 ) }
-              , { position = Point3d.meters (x + 1) y z, uv = ( 1, 0 ) }
-              , { position = Point3d.meters x (y + 1) z, uv = ( 0, 1 ) }
-              )
-            , ( { position = Point3d.meters x (y + 1) z, uv = ( 0, 1 ) }
-              , { position = Point3d.meters (x + 1) (y + 1) z, uv = ( 1, 1 ) }
-              , { position = Point3d.meters (x + 1) y z, uv = ( 1, 0 ) }
-              )
-            ]
-
-        mesh =
-            map
-                |> List.indexedMap coords2dRow
-                |> List.concat
-                |> List.filterMap (Maybe.map toTexturedFacets)
-                |> List.concat
-                |> TriangularMesh.triangles
-                |> Mesh.texturedFacets
-
-        material =
-            Material.texturedMatte tx
-    in
-    Scene3d.mesh material mesh
