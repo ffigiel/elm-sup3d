@@ -69,6 +69,7 @@ type alias Model =
     , player : Player
     , textures : Textures
     , floor : Maybe Entity
+    , nextNpcId : Int
     , npcs : Dict Int Npc
     , dialog : Maybe Dialog
     }
@@ -93,6 +94,7 @@ type alias Npc =
     , entity : Entity
     , pos : Vector3d Length.Meters WorldCoordinates
     , angle : Angle
+    , targetAngle : Angle
     , dialog : List String
     , action : NpcAction
     , actionTimeLeft : Float
@@ -125,7 +127,8 @@ init _ =
             , player = player
             , textures = textures
             , floor = Nothing
-            , npcs = npcs
+            , nextNpcId = 0
+            , npcs = Dict.empty
             , dialog = Nothing
             }
 
@@ -139,30 +142,22 @@ init _ =
             , water = Nothing
             }
 
-        npcs =
-            npcsFromValues
-                [ { id = 0
-                  , entity = makeCube Color.darkRed
-                  , pos = Vector3d.meters 4 12 0
-                  , angle = Angle.degrees 0
-                  , dialog =
-                        [ "Hey"
-                        , "What's up?"
-                        ]
-                  , action = NpcPacing <| Angle.degrees 0
-                  , actionTimeLeft = 0
-                  }
-                , { id = 1
-                  , entity = makeCube Color.purple
-                  , pos = Vector3d.meters 14 6 0
-                  , angle = Angle.degrees 0
-                  , dialog =
-                        [ "Sup"
-                        ]
-                  , action = NpcWaiting
-                  , actionTimeLeft = 0
-                  }
+        npc1 =
+            { color = Color.darkRed
+            , pos = Vector3d.meters 4 12 0
+            , dialog =
+                [ "Hey"
+                , "What's up?"
                 ]
+            }
+
+        npc2 =
+            { color = Color.purple
+            , pos = Vector3d.meters 14 6 0
+            , dialog =
+                [ "Sup"
+                ]
+            }
 
         cmd : Cmd Msg
         cmd =
@@ -176,7 +171,37 @@ init _ =
                     (Material.loadWith Material.nearestNeighborFiltering "/water.png")
                 ]
     in
-    ( model, cmd )
+    ( model
+        |> addNpc npc1
+        |> addNpc npc2
+    , cmd
+    )
+
+
+addNpc :
+    { color : Color
+    , pos : Vector3d Length.Meters WorldCoordinates
+    , dialog : List String
+    }
+    -> Model
+    -> Model
+addNpc { color, pos, dialog } model =
+    let
+        npc =
+            { id = model.nextNpcId
+            , entity = makeCube color
+            , pos = pos
+            , dialog = dialog
+            , angle = Angle.degrees 0
+            , targetAngle = Angle.degrees 0
+            , action = NpcWaiting
+            , actionTimeLeft = 0
+            }
+    in
+    { model
+        | nextNpcId = model.nextNpcId + 1
+        , npcs = Dict.insert npc.id npc model.npcs
+    }
 
 
 npcsFromValues : List Npc -> Dict Int Npc
@@ -280,18 +305,20 @@ update msg model =
                         (Maybe.map
                             (\npc ->
                                 let
-                                    newAngle =
+                                    newTargetAngle =
                                         case action of
-                                            NpcPacing angle ->
-                                                angle
+                                            NpcPacing dAngle ->
+                                                Angle.inDegrees dAngle
+                                                    + Angle.inDegrees npc.targetAngle
+                                                    |> Angle.degrees
 
                                             _ ->
-                                                npc.angle
+                                                npc.targetAngle
                                 in
                                 { npc
                                     | action = action
                                     , actionTimeLeft = actionTimeLeft
-                                    , angle = newAngle
+                                    , targetAngle = newTargetAngle
                                 }
                             )
                         )
@@ -397,12 +424,37 @@ npcsTick d npcs =
 
 npcTick : Float -> Npc -> ( Npc, Cmd Msg )
 npcTick d npc =
-    case npc.action of
+    let
+        newNpc =
+            { npc
+                | angle = angleTick d ( npc.angle, npc.targetAngle )
+            }
+    in
+    case newNpc.action of
         NpcTalking _ ->
-            ( npc, Cmd.none )
+            ( newNpc, Cmd.none )
 
         _ ->
-            npcTickAction d { npc | actionTimeLeft = npc.actionTimeLeft - d }
+            npcTickAction d { newNpc | actionTimeLeft = newNpc.actionTimeLeft - d }
+
+
+angleTick : Float -> ( Angle, Angle ) -> Angle
+angleTick d ( angle, targetAngle ) =
+    let
+        degrees =
+            Angle.inDegrees angle
+
+        targetDegrees =
+            Angle.inDegrees targetAngle
+
+        dDegrees =
+            targetDegrees - degrees
+
+        turnSpeed =
+            min 1 (d * 3)
+    in
+    (degrees + (turnSpeed * dDegrees))
+        |> Angle.degrees
 
 
 npcTickAction : Float -> Npc -> ( Npc, Cmd Msg )
@@ -417,13 +469,13 @@ npcTickAction d npc =
                     NpcWaiting ->
                         npc
 
-                    NpcPacing angle ->
+                    NpcPacing _ ->
                         let
                             dPos =
                                 Vector3d.rThetaOn
                                     SketchPlane3d.xy
                                     (Length.meters <| d * npcSpeed)
-                                    angle
+                                    npc.angle
 
                             newPos =
                                 Vector3d.plus
@@ -467,7 +519,7 @@ genNpcWaiting =
 genNpcPacing : Random.Generator ( NpcAction, Float )
 genNpcPacing =
     Random.map2 (\angle duration -> ( NpcPacing angle, duration ))
-        (Random.float 0 360 |> Random.map Angle.degrees)
+        (Random.float -60 60 |> Random.map Angle.degrees)
         (Random.float 1 3)
 
 
