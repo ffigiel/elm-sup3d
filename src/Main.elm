@@ -758,29 +758,69 @@ makeCube color =
         material =
             Material.matte color
 
-        quad =
+        side =
             Scene3d.quadWithShadow material
 
         bottom =
-            quad p1 p2 p3 p4
+            side p1 p2 p3 p4
 
         top =
-            quad p5 p6 p7 p8
+            side p5 p6 p7 p8
 
         front =
-            quad p2 p3 p7 p6
+            side p2 p3 p7 p6
 
         back =
-            quad p1 p4 p8 p5
+            side p1 p4 p8 p5
 
         left =
-            quad p1 p2 p6 p5
+            side p1 p2 p6 p5
 
         right =
-            quad p4 p3 p7 p8
+            side p4 p3 p7 p8
+
+        eyeCenters =
+            [ ( -0.2, 0.2 )
+            , ( 0.2, 0.2 )
+            ]
+
+        eyeWhites =
+            makeEyes Color.white 0.1 0.501
+
+        eyePupils =
+            makeEyes Color.black 0.05 0.502
+
+        makeEyes eyeColor size distance =
+            eyeCenters
+                |> List.map
+                    (\( x, z ) ->
+                        let
+                            x1 =
+                                Length.meters (x - size)
+
+                            x2 =
+                                Length.meters (x + size)
+
+                            y =
+                                Length.meters distance
+
+                            z1 =
+                                Length.meters (z - size)
+
+                            z2 =
+                                Length.meters (z + size)
+                        in
+                        Scene3d.quad (Material.matte eyeColor)
+                            (Point3d.xyz x1 y z1)
+                            (Point3d.xyz x1 y z2)
+                            (Point3d.xyz x2 y z2)
+                            (Point3d.xyz x2 y z1)
+                    )
+                |> Scene3d.group
     in
     -- Combine all faces into a single entity
-    Scene3d.group [ bottom, top, front, back, left, right ]
+    Scene3d.group [ bottom, top, front, back, left, right, eyeWhites, eyePupils ]
+        |> Scene3d.rotateAround Axis3d.z (Angle.degrees -90)
         |> Scene3d.translateBy (Vector3d.meters 0 0 0.5)
 
 
