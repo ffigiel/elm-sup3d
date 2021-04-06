@@ -16,6 +16,9 @@ import Keyboard
 import Keyboard.Arrows
 import Length
 import List.Extra as List
+import Logic.Component as Component
+import Logic.Entity as Entity
+import Logic.System as System
 import LuminousFlux
 import Pixels
 import Point3d
@@ -81,6 +84,7 @@ type alias Model =
     , nextNpcId : Int
     , npcs : Dict Int Npc
     , dialog : Maybe Dialog
+    , world : World
     }
 
 
@@ -166,6 +170,7 @@ init _ =
             , nextNpcId = 0
             , npcs = Dict.empty
             , dialog = Nothing
+            , world = initWorld
             }
 
         player =
@@ -1227,3 +1232,95 @@ getLights t =
                 }
     in
     Scene3d.twoLights sunOrMoon softLighting
+
+
+
+-- ECS
+
+
+type alias World =
+    { shape : Component.Set Shape
+    , position : Component.Set Position
+    , angle : Component.Set ( Angle, Angle )
+    , name : Component.Set String
+    , dialog : Component.Set (List String)
+    }
+
+
+initWorld : World
+initWorld =
+    let
+        world =
+            { shape = Component.empty
+            , position = Component.empty
+            , angle = Component.empty
+            , name = Component.empty
+            , dialog = Component.empty
+            }
+
+        npcData :
+            List
+                { color : Color
+                , pos : Position
+                , name : String
+                , dialog : List String
+                }
+        npcData =
+            [ { color = Color.purple
+              , pos = Vector3d.meters 4 12 0
+              , name = "Viola"
+              , dialog =
+                    [ "Hey!"
+                    , "What's up?"
+                    ]
+              }
+            , { color = Color.darkRed
+              , pos = Vector3d.meters 14 6 0
+              , name = "Redd"
+              , dialog =
+                    [ "Sup."
+                    ]
+              }
+            ]
+
+        initAngle =
+            Angle.degrees 90
+
+        npcEntity =
+            \( i, { color, pos, name, dialog } ) ->
+                Entity.create i
+                    >> Entity.with ( shapeSpec, makeCube color )
+                    >> Entity.with ( positionSpec, pos )
+                    >> Entity.with ( angleSpec, ( initAngle, initAngle ) )
+                    >> Entity.with ( nameSpec, name )
+                    >> Entity.with ( dialogSpec, dialog )
+                    >> Tuple.second
+    in
+    npcData
+        |> List.indexedMap Tuple.pair
+        |> List.foldl npcEntity world
+
+
+shapeSpec : Component.Spec Shape { world | shape : Component.Set Shape }
+shapeSpec =
+    Component.Spec .shape (\comps w -> { w | shape = comps })
+
+
+positionSpec : Component.Spec Position { world | position : Component.Set Position }
+positionSpec =
+    Component.Spec .position (\comps w -> { w | position = comps })
+
+
+angleSpec : Component.Spec ( Angle, Angle ) { world | angle : Component.Set ( Angle, Angle ) }
+angleSpec =
+    Component.Spec .angle (\comps w -> { w | angle = comps })
+
+
+nameSpec : Component.Spec String { world | name : Component.Set String }
+nameSpec =
+    Component.Spec .name (\comps w -> { w | name = comps })
+
+
+dialogSpec : Component.Spec (List String) { world | dialog : Component.Set (List String) }
+dialogSpec =
+    Component.Spec .dialog (\comps w -> { w | dialog = comps })
