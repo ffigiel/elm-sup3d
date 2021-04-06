@@ -59,7 +59,7 @@ type WorldCoordinates
     = WorldCoordinates
 
 
-type alias Entity =
+type alias Shape =
     Scene3d.Entity WorldCoordinates
 
 
@@ -73,7 +73,7 @@ type alias Model =
     , player : Player
     , loadingErrors : List String
     , textures : Textures
-    , floor : Maybe Entity
+    , floor : Maybe Shape
     , nextNpcId : Int
     , npcs : Dict Int Npc
     , dialog : Maybe Dialog
@@ -90,7 +90,7 @@ type alias Dialog =
 
 
 type alias Player =
-    { entity : Entity
+    { entity : Shape
     , pos : Vector3d Length.Meters WorldCoordinates
     , angle : Angle
     , targetAngle : Angle
@@ -100,7 +100,7 @@ type alias Player =
 type alias Npc =
     { id : Int
     , name : String
-    , entity : Entity
+    , entity : Shape
     , pos : Vector3d Length.Meters WorldCoordinates
     , angle : Angle
     , targetAngle : Angle
@@ -772,7 +772,7 @@ wasKeyPressed key model =
 -- ENTITIES
 
 
-makeCube : Color -> Entity
+makeCube : Color -> Shape
 makeCube color =
     let
         -- 1x1m cube
@@ -879,7 +879,7 @@ makeCube color =
 makeFloor :
     Texture
     -> Texture
-    -> Entity
+    -> Shape
 makeFloor grassTx waterTx =
     let
         ( g, w ) =
@@ -944,7 +944,7 @@ getMapForTexture map id =
     ( id, List.map processRow map )
 
 
-mapAndTextureToEntity : (Int -> Texture) -> ( Int, List2d Bool ) -> Entity
+mapAndTextureToEntity : (Int -> Texture) -> ( Int, List2d Bool ) -> Shape
 mapAndTextureToEntity textureFromId ( id, map ) =
     let
         tx =
@@ -1016,7 +1016,7 @@ view model =
                 |> Html.div []
 
 
-gameView : Model -> Entity -> Html msg
+gameView : Model -> Shape -> Html msg
 gameView model floor =
     let
         player =
