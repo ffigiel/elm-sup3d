@@ -92,6 +92,7 @@ type alias Player =
     { entity : Entity
     , pos : Vector3d Length.Meters WorldCoordinates
     , angle : Angle
+    , targetAngle : Angle
     }
 
 
@@ -164,6 +165,7 @@ init _ =
         player =
             { entity = makeCube Color.lightBlue
             , angle = Angle.degrees 0
+            , targetAngle = Angle.degrees 0
             , pos = Vector3d.meters 8 8 0
             }
 
@@ -389,15 +391,19 @@ gameTick d model =
                 _ ->
                     player.pos
 
-        newPlayerAngle =
+        newPlayerTargetAngle =
             if model.player.pos == newPlayerPos then
-                model.player.angle
+                model.player.targetAngle
 
             else
                 angleFromPoints model.player.pos newPlayerPos
 
         newPlayer =
-            { player | pos = newPlayerPos, angle = newPlayerAngle }
+            { player
+                | pos = newPlayerPos
+                , angle = angleTick d ( model.player.angle, newPlayerTargetAngle )
+                , targetAngle = newPlayerTargetAngle
+            }
 
         ( newNpcs, npcCmds ) =
             npcsTick d model.npcs
