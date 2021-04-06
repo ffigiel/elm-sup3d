@@ -71,6 +71,7 @@ type alias Model =
     , pressedKeys : List Keyboard.Key
     , keyChange : Maybe Keyboard.KeyChange
     , player : Player
+    , loadingErrors : List String
     , textures : Textures
     , floor : Maybe Entity
     , nextNpcId : Int
@@ -155,6 +156,7 @@ init _ =
             , pressedKeys = []
             , keyChange = Nothing
             , player = player
+            , loadingErrors = []
             , textures = textures
             , floor = Nothing
             , nextNpcId = 0
@@ -193,17 +195,19 @@ init _ =
                 ]
             }
 
+        textureCmds =
+            [ GrassTx, WaterTx ]
+                |> List.map
+                    (\id ->
+                        Task.attempt
+                            (GotTexture id)
+                            (Material.loadWith Material.nearestNeighborFiltering (getTextureUrl id))
+                    )
+
         cmd : Cmd Msg
         cmd =
             Cmd.batch
-                [ getViewport
-                , Task.attempt
-                    (GotTexture GrassTx)
-                    (Material.loadWith Material.nearestNeighborFiltering "/grass.png")
-                , Task.attempt
-                    (GotTexture WaterTx)
-                    (Material.loadWith Material.nearestNeighborFiltering "/water.png")
-                ]
+                (getViewport :: textureCmds)
     in
     ( model
         |> addNpc npc1
@@ -245,6 +249,16 @@ getViewport =
     Task.perform
         (\{ viewport } -> GotViewport (ceiling viewport.width) (ceiling viewport.height))
         Browser.Dom.getViewport
+
+
+getTextureUrl : TextureId -> String
+getTextureUrl id =
+    case id of
+        GrassTx ->
+            "/grass.png"
+
+        WaterTx ->
+            "/water.png"
 
 
 
@@ -297,7 +311,7 @@ update msg model =
             in
             newModel |> keyEvent
 
-        GotTexture key texture ->
+        GotTexture txId texture ->
             case texture of
                 Ok tx ->
                     let
@@ -305,7 +319,7 @@ update msg model =
                             model.textures
 
                         newTextures =
-                            case key of
+                            case txId of
                                 GrassTx ->
                                     { textures | grass = Just tx }
 
@@ -317,8 +331,24 @@ update msg model =
                     in
                     ( newModel |> updateFloor, Cmd.none )
 
-                _ ->
-                    ( model, Cmd.none )
+                Err err ->
+                    let
+                        newError =
+                            case err of
+                                WebGL.Texture.LoadError ->
+                                    "Could not load texture "
+                                        ++ getTextureUrl txId
+
+                                WebGL.Texture.SizeError x y ->
+                                    "Texture "
+                                        ++ getTextureUrl txId
+                                        ++ " has invalid dimensions ("
+                                        ++ String.fromInt x
+                                        ++ "x"
+                                        ++ String.fromInt y
+                                        ++ ")"
+                    in
+                    ( { model | loadingErrors = model.loadingErrors ++ [ newError ] }, Cmd.none )
 
         GotNpcAction npcId ( action, actionTimeLeft ) ->
             let
@@ -973,12 +1003,17 @@ mapAndTextureToEntity textureFromId ( id, map ) =
 
 view : Model -> Html msg
 view model =
-    case model.floor of
-        Just floor ->
+    case ( model.loadingErrors, model.floor ) of
+        ( [], Just floor ) ->
             gameView model floor
 
+        ( [], Nothing ) ->
+            Html.div [] [ Html.text "Loading" ]
+
         _ ->
-            Html.p [] [ Html.text "Loading" ]
+            model.loadingErrors
+                |> List.map (Html.text >> List.singleton >> Html.p [])
+                |> Html.div []
 
 
 gameView : Model -> Entity -> Html msg
