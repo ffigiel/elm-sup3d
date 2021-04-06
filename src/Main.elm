@@ -1248,6 +1248,7 @@ type alias World =
     , angle : Component.Set ( Angle, Angle )
     , name : Component.Set String
     , dialog : Component.Set (List String)
+    , npcAction : Component.Set ( NpcAction, Float )
     }
 
 
@@ -1260,6 +1261,7 @@ initWorld =
             , angle = Component.empty
             , name = Component.empty
             , dialog = Component.empty
+            , npcAction = Component.empty
             }
 
         npcData :
@@ -1298,6 +1300,7 @@ initWorld =
                     >> Entity.with ( angleSpec, ( initAngle, initAngle ) )
                     >> Entity.with ( nameSpec, name )
                     >> Entity.with ( dialogSpec, dialog )
+                    >> Entity.with ( npcActionSpec, ( NpcWaiting, 0 ) )
                     >> Tuple.second
     in
     npcData
@@ -1328,3 +1331,11 @@ nameSpec =
 dialogSpec : Component.Spec (List String) { world | dialog : Component.Set (List String) }
 dialogSpec =
     Component.Spec .dialog (\comps w -> { w | dialog = comps })
+
+
+npcActionSpec :
+    Component.Spec
+        ( NpcAction, Float )
+        { world | npcAction : Component.Set ( NpcAction, Float ) }
+npcActionSpec =
+    Component.Spec .npcAction (\comps w -> { w | npcAction = comps })
