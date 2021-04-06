@@ -3,7 +3,7 @@
 .DEFAULT_GOAL:= dist
 
 clean:
-	rm -rf .cache dist elm-stuff
+	rm -rf .cache dist
 
 dist: clean
 	npx parcel build --no-source-maps src/index.html
