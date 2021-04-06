@@ -110,7 +110,7 @@ type alias Npc =
 type NpcAction
     = NpcWaiting
     | NpcPacing Angle
-    | NpcTalking NpcAction
+    | NpcTalking Angle ( NpcAction, Float )
 
 
 type alias Textures =
@@ -321,26 +321,7 @@ update msg model =
                 newNpcs =
                     Dict.update
                         npcId
-                        (Maybe.map
-                            (\npc ->
-                                let
-                                    newTargetAngle =
-                                        case action of
-                                            NpcPacing dAngle ->
-                                                Angle.inDegrees dAngle
-                                                    + Angle.inDegrees npc.targetAngle
-                                                    |> Angle.degrees
-
-                                            _ ->
-                                                npc.targetAngle
-                                in
-                                { npc
-                                    | action = action
-                                    , actionTimeLeft = actionTimeLeft
-                                    , targetAngle = newTargetAngle
-                                }
-                            )
-                        )
+                        (Maybe.map <| applyNpcAction action actionTimeLeft)
                         model.npcs
             in
             ( { model | npcs = newNpcs }, Cmd.none )
@@ -453,7 +434,7 @@ npcTick d npc =
             }
     in
     case newNpc.action of
-        NpcTalking _ ->
+        NpcTalking _ _ ->
             ( newNpc, Cmd.none )
 
         _ ->
@@ -509,7 +490,7 @@ npcTickAction d npc =
                         in
                         { npc | pos = newPos }
 
-                    NpcTalking _ ->
+                    NpcTalking _ _ ->
                         -- This branch was handled elsewhere and should never be reached
                         npc
         in
@@ -518,28 +499,33 @@ npcTickAction d npc =
 
 prepareNewNpcAction : Npc -> Cmd Msg
 prepareNewNpcAction npc =
-    Random.generate (GotNpcAction npc.id) genNpcAction
+    Random.generate (GotNpcAction npc.id) (genNpcAction npc)
 
 
-genNpcAction : Random.Generator ( NpcAction, Float )
-genNpcAction =
+genNpcAction : Npc -> Random.Generator ( NpcAction, Float )
+genNpcAction npc =
     Random.weighted
-        ( 2, genNpcWaiting )
-        [ ( 3, genNpcPacing ) ]
+        ( 2, genNpcWaiting npc )
+        [ ( 3, genNpcPacing npc )
+        ]
         |> Random.andThen identity
 
 
-genNpcWaiting : Random.Generator ( NpcAction, Float )
-genNpcWaiting =
+genNpcWaiting : Npc -> Random.Generator ( NpcAction, Float )
+genNpcWaiting _ =
     Random.map
         (\duration -> ( NpcWaiting, duration ))
         (Random.float 1 4)
 
 
-genNpcPacing : Random.Generator ( NpcAction, Float )
-genNpcPacing =
+genNpcPacing : Npc -> Random.Generator ( NpcAction, Float )
+genNpcPacing npc =
+    let
+        npcDegrees =
+            Angle.inDegrees npc.angle
+    in
     Random.map2 (\angle duration -> ( NpcPacing angle, duration ))
-        (Random.float -60 60 |> Random.map Angle.degrees)
+        (Random.float (npcDegrees - 60) (npcDegrees + 60) |> Random.map Angle.degrees)
         (Random.float 1 3)
 
 
@@ -576,14 +562,16 @@ findNewDialog model =
     case findNpcToTalkWith model.player model.npcs of
         Just talkingNpc ->
             let
+                newAngle =
+                    angleFromPoints talkingNpc.pos model.player.pos
+
+                newAction =
+                    NpcTalking newAngle ( talkingNpc.action, talkingNpc.actionTimeLeft )
+
                 newNpcs =
                     Dict.update
                         talkingNpc.id
-                        (Maybe.map
-                            (\npc ->
-                                { npc | action = NpcTalking npc.action }
-                            )
-                        )
+                        (Maybe.map <| applyNpcAction newAction 0)
                         model.npcs
 
                 dialog =
@@ -597,6 +585,39 @@ findNewDialog model =
 
         Nothing ->
             ( Nothing, model.npcs )
+
+
+applyNpcAction : NpcAction -> Float -> Npc -> Npc
+applyNpcAction action actionTimeLeft npc =
+    let
+        newTargetAngle =
+            case action of
+                NpcPacing angle ->
+                    angle
+
+                NpcTalking angle _ ->
+                    angle
+
+                _ ->
+                    npc.targetAngle
+    in
+    { npc
+        | action = action
+        , actionTimeLeft = actionTimeLeft
+        , targetAngle = newTargetAngle
+    }
+
+
+angleFromPoints :
+    Vector3d Length.Meters WorldCoordinates
+    -> Vector3d Length.Meters WorldCoordinates
+    -> Angle
+angleFromPoints a b =
+    let
+        diff =
+            Vector3d.minus a b
+    in
+    Angle.atan2 (Vector3d.yComponent diff) (Vector3d.xComponent diff)
 
 
 advanceDialog : Dialog -> Dict Int Npc -> ( Maybe Dialog, Dict Int Npc )
@@ -629,8 +650,8 @@ stopNpcTalking npcId npcs =
         (Maybe.map
             (\npc ->
                 case npc.action of
-                    NpcTalking a ->
-                        { npc | action = a }
+                    NpcTalking _ ( action, actionTimeLeft ) ->
+                        applyNpcAction action actionTimeLeft npc
 
                     _ ->
                         npc
