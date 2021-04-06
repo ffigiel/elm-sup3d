@@ -1308,34 +1308,34 @@ initWorld =
         |> List.foldl npcEntity world
 
 
-shapeSpec : Component.Spec Shape { world | shape : Component.Set Shape }
+shapeSpec : Component.Spec Shape { w | shape : Component.Set Shape }
 shapeSpec =
-    Component.Spec .shape (\comps w -> { w | shape = comps })
+    Component.Spec .shape (\c w -> { w | shape = c })
 
 
-positionSpec : Component.Spec Position { world | position : Component.Set Position }
+positionSpec : Component.Spec Position { w | position : Component.Set Position }
 positionSpec =
-    Component.Spec .position (\comps w -> { w | position = comps })
+    Component.Spec .position (\c w -> { w | position = c })
 
 
-angleSpec : Component.Spec ( Angle, Angle ) { world | angle : Component.Set ( Angle, Angle ) }
+angleSpec : Component.Spec ( Angle, Angle ) { w | angle : Component.Set ( Angle, Angle ) }
 angleSpec =
-    Component.Spec .angle (\comps w -> { w | angle = comps })
+    Component.Spec .angle (\c w -> { w | angle = c })
 
 
-nameSpec : Component.Spec String { world | name : Component.Set String }
+nameSpec : Component.Spec String { w | name : Component.Set String }
 nameSpec =
-    Component.Spec .name (\comps w -> { w | name = comps })
+    Component.Spec .name (\c w -> { w | name = c })
 
 
-dialogSpec : Component.Spec (List String) { world | dialog : Component.Set (List String) }
+dialogSpec : Component.Spec (List String) { w | dialog : Component.Set (List String) }
 dialogSpec =
-    Component.Spec .dialog (\comps w -> { w | dialog = comps })
+    Component.Spec .dialog (\c w -> { w | dialog = c })
 
 
 npcActionSpec :
     Component.Spec
         ( NpcAction, Float )
-        { world | npcAction : Component.Set ( NpcAction, Float ) }
+        { w | npcAction : Component.Set ( NpcAction, Float ) }
 npcActionSpec =
-    Component.Spec .npcAction (\comps w -> { w | npcAction = comps })
+    Component.Spec .npcAction (\c w -> { w | npcAction = c })
