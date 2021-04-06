@@ -1028,14 +1028,18 @@ gameView model floor =
                 |> Scene3d.translateBy model.player.pos
 
         npcs =
-            model.npcs
-                |> Dict.values
-                |> List.map
-                    (\n ->
-                        n.entity
-                            |> Scene3d.rotateAround Axis3d.z n.angle
-                            |> Scene3d.translateBy n.pos
+            System.foldl3
+                (\shape ( angle, _ ) position acc ->
+                    (shape
+                        |> Scene3d.rotateAround Axis3d.z angle
+                        |> Scene3d.translateBy position
                     )
+                        :: acc
+                )
+                (shapeSpec.get model.world)
+                (angleSpec.get model.world)
+                (positionSpec.get model.world)
+                []
 
         cameraPos =
             Point3d.translateBy model.player.pos Point3d.origin
