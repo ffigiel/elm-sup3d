@@ -91,6 +91,7 @@ type alias Dialog =
 type alias Player =
     { entity : Entity
     , pos : Vector3d Length.Meters WorldCoordinates
+    , angle : Angle
     }
 
 
@@ -162,6 +163,7 @@ init _ =
 
         player =
             { entity = makeCube Color.lightBlue
+            , angle = Angle.degrees 0
             , pos = Vector3d.meters 8 8 0
             }
 
@@ -387,8 +389,15 @@ gameTick d model =
                 _ ->
                     player.pos
 
+        newPlayerAngle =
+            if model.player.pos == newPlayerPos then
+                model.player.angle
+
+            else
+                angleFromPoints model.player.pos newPlayerPos
+
         newPlayer =
-            { player | pos = newPlayerPos }
+            { player | pos = newPlayerPos, angle = newPlayerAngle }
 
         ( newNpcs, npcCmds ) =
             npcsTick d model.npcs
@@ -963,7 +972,9 @@ gameView : Model -> Entity -> Html msg
 gameView model floor =
     let
         player =
-            model.player.entity |> Scene3d.translateBy model.player.pos
+            model.player.entity
+                |> Scene3d.rotateAround Axis3d.z model.player.angle
+                |> Scene3d.translateBy model.player.pos
 
         npcs =
             model.npcs
