@@ -59,6 +59,10 @@ type WorldCoordinates
     = WorldCoordinates
 
 
+type alias Position =
+    Vector3d Length.Meters WorldCoordinates
+
+
 type alias Shape =
     Scene3d.Entity WorldCoordinates
 
@@ -91,7 +95,7 @@ type alias Dialog =
 
 type alias Player =
     { entity : Shape
-    , pos : Vector3d Length.Meters WorldCoordinates
+    , pos : Position
     , angle : Angle
     , targetAngle : Angle
     }
@@ -101,7 +105,7 @@ type alias Npc =
     { id : Int
     , name : String
     , entity : Shape
-    , pos : Vector3d Length.Meters WorldCoordinates
+    , pos : Position
     , angle : Angle
     , targetAngle : Angle
     , dialog : List String
@@ -219,7 +223,7 @@ init _ =
 addNpc :
     { name : String
     , color : Color
-    , pos : Vector3d Length.Meters WorldCoordinates
+    , pos : Position
     , dialog : List String
     }
     -> Model
@@ -660,10 +664,7 @@ applyNpcAction action actionTimeLeft npc =
     }
 
 
-angleFromPoints :
-    Vector3d Length.Meters WorldCoordinates
-    -> Vector3d Length.Meters WorldCoordinates
-    -> Angle
+angleFromPoints : Position -> Position -> Angle
 angleFromPoints a b =
     let
         diff =
@@ -745,10 +746,7 @@ findNpcToTalkWith player npcs =
         |> List.find (\npc -> isNearby player.pos npc.pos)
 
 
-isNearby :
-    Vector3d Length.Meters WorldCoordinates
-    -> Vector3d Length.Meters WorldCoordinates
-    -> Bool
+isNearby : Position -> Position -> Bool
 isNearby a b =
     let
         minDistance =
