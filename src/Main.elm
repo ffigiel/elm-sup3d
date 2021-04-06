@@ -465,13 +465,20 @@ angleTick d ( angle, targetAngle ) =
         targetDegrees =
             Angle.inDegrees targetAngle
 
-        dDegrees =
+        deltaDegrees =
             targetDegrees - degrees
 
+        normalizedDeltaDegrees =
+            if deltaDegrees > 180 then
+                deltaDegrees - 360
+
+            else
+                deltaDegrees
+
         turnSpeed =
-            min 1 (d * 3)
+            min 1 (d * 4)
     in
-    (degrees + (turnSpeed * dDegrees))
+    (degrees + (turnSpeed * normalizedDeltaDegrees))
         |> Angle.degrees
 
 
