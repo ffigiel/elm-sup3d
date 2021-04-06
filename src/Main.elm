@@ -1243,12 +1243,12 @@ getLights t =
 
 
 type alias World =
-    { shape : Component.Set Shape
-    , position : Component.Set Position
-    , angle : Component.Set ( Angle, Angle )
-    , name : Component.Set String
-    , dialog : Component.Set (List String)
-    , npcAction : Component.Set ( NpcAction, Float )
+    { shapes : Component.Set Shape
+    , positions : Component.Set Position
+    , angles : Component.Set ( Angle, Angle )
+    , names : Component.Set String
+    , dialogs : Component.Set (List String)
+    , npcActions : Component.Set ( NpcAction, Float )
     }
 
 
@@ -1256,12 +1256,12 @@ initWorld : World
 initWorld =
     let
         world =
-            { shape = Component.empty
-            , position = Component.empty
-            , angle = Component.empty
-            , name = Component.empty
-            , dialog = Component.empty
-            , npcAction = Component.empty
+            { shapes = Component.empty
+            , positions = Component.empty
+            , angles = Component.empty
+            , names = Component.empty
+            , dialogs = Component.empty
+            , npcActions = Component.empty
             }
 
         npcData :
@@ -1308,34 +1308,34 @@ initWorld =
         |> List.foldl npcEntity world
 
 
-shapeSpec : Component.Spec Shape { w | shape : Component.Set Shape }
+shapeSpec : Component.Spec Shape { w | shapes : Component.Set Shape }
 shapeSpec =
-    Component.Spec .shape (\c w -> { w | shape = c })
+    Component.Spec .shapes (\c w -> { w | shapes = c })
 
 
-positionSpec : Component.Spec Position { w | position : Component.Set Position }
+positionSpec : Component.Spec Position { w | positions : Component.Set Position }
 positionSpec =
-    Component.Spec .position (\c w -> { w | position = c })
+    Component.Spec .positions (\c w -> { w | positions = c })
 
 
-angleSpec : Component.Spec ( Angle, Angle ) { w | angle : Component.Set ( Angle, Angle ) }
+angleSpec : Component.Spec ( Angle, Angle ) { w | angles : Component.Set ( Angle, Angle ) }
 angleSpec =
-    Component.Spec .angle (\c w -> { w | angle = c })
+    Component.Spec .angles (\c w -> { w | angles = c })
 
 
-nameSpec : Component.Spec String { w | name : Component.Set String }
+nameSpec : Component.Spec String { w | names : Component.Set String }
 nameSpec =
-    Component.Spec .name (\c w -> { w | name = c })
+    Component.Spec .names (\c w -> { w | names = c })
 
 
-dialogSpec : Component.Spec (List String) { w | dialog : Component.Set (List String) }
+dialogSpec : Component.Spec (List String) { w | dialogs : Component.Set (List String) }
 dialogSpec =
-    Component.Spec .dialog (\c w -> { w | dialog = c })
+    Component.Spec .dialogs (\c w -> { w | dialogs = c })
 
 
 npcActionSpec :
     Component.Spec
         ( NpcAction, Float )
-        { w | npcAction : Component.Set ( NpcAction, Float ) }
+        { w | npcActions : Component.Set ( NpcAction, Float ) }
 npcActionSpec =
-    Component.Spec .npcAction (\c w -> { w | npcAction = c })
+    Component.Spec .npcActions (\c w -> { w | npcActions = c })
