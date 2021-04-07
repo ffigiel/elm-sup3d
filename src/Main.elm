@@ -17,7 +17,7 @@ import Keyboard.Arrows
 import Length
 import List.Extra as List
 import Logic.Component as Component
-import Logic.Entity as Entity
+import Logic.Entity as Entity exposing (EntityID)
 import Logic.System as System
 import LuminousFlux
 import Pixels
@@ -1268,6 +1268,14 @@ type alias World =
     }
 
 
+type alias NpcData =
+    { color : Color
+    , pos : Position
+    , name : String
+    , dialog : List String
+    }
+
+
 initWorld : World
 initWorld =
     let
@@ -1280,13 +1288,7 @@ initWorld =
             , npcActions = Component.empty
             }
 
-        npcData :
-            List
-                { color : Color
-                , pos : Position
-                , name : String
-                , dialog : List String
-                }
+        npcData : List NpcData
         npcData =
             [ { color = Color.purple
               , pos = Vector3d.meters 4 12 0
@@ -1308,20 +1310,19 @@ initWorld =
         initAngle =
             Angle.degrees 90
 
-        npcEntity =
-            \( i, { color, pos, name, dialog } ) ->
-                Entity.create i
-                    >> Entity.with ( shapeSpec, makeCube color )
-                    >> Entity.with ( positionSpec, pos )
-                    >> Entity.with ( angleSpec, ( initAngle, initAngle ) )
-                    >> Entity.with ( nameSpec, name )
-                    >> Entity.with ( dialogSpec, dialog )
-                    >> Entity.with ( npcActionSpec, ( NpcWaiting, 0 ) )
-                    >> Tuple.second
+        npcEntity : NpcData -> ( EntityID, World ) -> ( EntityID, World )
+        npcEntity { color, pos, name, dialog } ( i, w ) =
+            Entity.create (i + 1) w
+                |> Entity.with ( shapeSpec, makeCube color )
+                |> Entity.with ( positionSpec, pos )
+                |> Entity.with ( angleSpec, ( initAngle, initAngle ) )
+                |> Entity.with ( nameSpec, name )
+                |> Entity.with ( dialogSpec, dialog )
+                |> Entity.with ( npcActionSpec, ( NpcWaiting, 0 ) )
     in
-    npcData
-        |> List.indexedMap Tuple.pair
-        |> List.foldl npcEntity world
+    ( 0, world )
+        |> (\a -> List.foldl npcEntity a npcData)
+        |> Tuple.second
 
 
 shapeSpec : Component.Spec Shape { w | shapes : Component.Set Shape }
