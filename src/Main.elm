@@ -535,34 +535,6 @@ gameTick d model =
         arrows =
             Keyboard.Arrows.arrows model.pressedKeys
 
-        player =
-            model.player
-
-        newPlayerPos =
-            case model.dialog of
-                Nothing ->
-                    Vector3d.plus player.pos <|
-                        Vector3d.meters
-                            (toFloat arrows.x * d * playerSpeed)
-                            (toFloat arrows.y * d * playerSpeed)
-                            0
-
-                _ ->
-                    player.pos
-
-        newPlayerTargetAngle =
-            if model.player.pos == newPlayerPos then
-                model.player.targetAngle
-
-            else
-                angleFromPoints model.player.pos newPlayerPos
-
-        newPlayer =
-            { player
-                | pos = newPlayerPos
-                , targetAngle = newPlayerTargetAngle
-            }
-
         ( newNpcs, npcCmds ) =
             npcsTick d model.npcs
 
@@ -571,8 +543,7 @@ gameTick d model =
 
         newModel =
             { model
-                | player = newPlayer
-                , npcs = newNpcs
+                | npcs = newNpcs
                 , dialog = newDialog
             }
 
