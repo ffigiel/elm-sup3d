@@ -1038,12 +1038,7 @@ view model =
 gameView : Model -> Shape -> Html msg
 gameView model floor =
     let
-        player =
-            model.player.entity
-                |> Scene3d.rotateAround Axis3d.z model.player.angle
-                |> Scene3d.translateBy model.player.pos
-
-        npcs =
+        shapes =
             System.foldl3
                 (\shape ( angle, _ ) position acc ->
                     (shape
@@ -1077,7 +1072,7 @@ gameView model floor =
         [ fpsView model.deltas
         , dialogView model.dialog
         , Scene3d.custom
-            { entities = [ player, floor ] ++ npcs
+            { entities = [ floor ] ++ shapes
             , camera = camera
             , background = Scene3d.backgroundColor Color.black
             , clipDepth = Length.meters 0.01
@@ -1319,9 +1314,17 @@ initWorld =
                 |> Entity.with ( nameSpec, name )
                 |> Entity.with ( dialogSpec, dialog )
                 |> Entity.with ( npcActionSpec, ( NpcWaiting, 0 ) )
+
+        playerEntity : ( EntityID, World ) -> ( EntityID, World )
+        playerEntity ( i, w ) =
+            Entity.create (i + 1) w
+                |> Entity.with ( shapeSpec, makeCube Color.lightBlue )
+                |> Entity.with ( positionSpec, Vector3d.meters 8 8 0 )
+                |> Entity.with ( angleSpec, ( initAngle, initAngle ) )
     in
     ( 0, world )
         |> (\a -> List.foldl npcEntity a npcData)
+        |> playerEntity
         |> Tuple.second
 
 
