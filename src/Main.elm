@@ -92,7 +92,7 @@ type alias Dialog =
     , text : String
     , duration : Float
     , queue : List String
-    , talkingNpcId : Int
+    , talkingNpcId : EntityID
     }
 
 
@@ -604,60 +604,78 @@ genNpcPacing npc =
 keyEvent : Model -> ( Model, Cmd Msg )
 keyEvent model =
     let
-        ( newDialog, newNpcs ) =
+        ( newDialog, newWorld ) =
             if wasKeyPressed Keyboard.Spacebar model then
                 case model.dialog of
                     Nothing ->
-                        findNewDialog model
+                        findNewDialog model.world
 
                     Just d ->
-                        advanceDialog d model.npcs
+                        advanceDialog d model.world
 
             else
-                ( model.dialog, model.npcs )
+                ( model.dialog, model.world )
 
         newModel =
             { model
-                | npcs = newNpcs
-                , dialog = newDialog
+                | dialog = newDialog
+                , world = newWorld
             }
     in
     ( newModel, Cmd.none )
 
 
-findNewDialog : Model -> ( Maybe Dialog, Dict Int Npc )
-findNewDialog model =
-    case Component.get model.world.playerId model.world.positions of
+findNewDialog : World -> ( Maybe Dialog, World )
+findNewDialog world =
+    case Component.get world.playerId world.positions of
         Nothing ->
-            ( Nothing, model.npcs )
+            ( Nothing, world )
 
         Just playerPos ->
-            case findNpcToTalkWith playerPos model.npcs of
-                Just talkingNpc ->
+            case findNpcToTalkWith playerPos world of
+                Just npcId ->
                     let
-                        newAngle =
-                            angleFromPoints talkingNpc.pos playerPos
+                        mPos =
+                            Component.get npcId world.positions
 
-                        newAction =
-                            NpcTalking newAngle ( talkingNpc.action, talkingNpc.actionTimeLeft )
+                        mDialogs =
+                            Component.get npcId world.dialogs
 
-                        newNpcs =
-                            Dict.update
-                                talkingNpc.id
-                                (Maybe.map <| applyNpcAction newAction 0)
-                                model.npcs
-
-                        dialog =
-                            createDialog
-                                { title = talkingNpc.name
-                                , texts = talkingNpc.dialog
-                                , talkingNpcId = talkingNpc.id
-                                }
+                        mName =
+                            Component.get npcId world.names
                     in
-                    ( dialog, newNpcs )
+                    case ( mPos, mDialogs, mName ) of
+                        ( Just pos, Just dialogTexts, Just name ) ->
+                            let
+                                newAngle =
+                                    angleFromPoints pos playerPos
+
+                                newActions =
+                                    Component.update npcId
+                                        (\( action, timeLeft ) ->
+                                            ( NpcTalking newAngle ( action, timeLeft )
+                                            , 0
+                                            )
+                                        )
+                                        world.npcActions
+
+                                dialog =
+                                    createDialog
+                                        { title = name
+                                        , texts = dialogTexts
+                                        , talkingNpcId = npcId
+                                        }
+
+                                newWorld =
+                                    { world | npcActions = newActions }
+                            in
+                            ( dialog, newWorld )
+
+                        _ ->
+                            ( Nothing, world )
 
                 Nothing ->
-                    ( Nothing, model.npcs )
+                    ( Nothing, world )
 
 
 applyNpcAction : NpcAction -> Float -> Npc -> Npc
@@ -690,15 +708,15 @@ angleFromPoints a b =
     Angle.atan2 (Vector3d.yComponent diff) (Vector3d.xComponent diff)
 
 
-advanceDialog : Dialog -> Dict Int Npc -> ( Maybe Dialog, Dict Int Npc )
-advanceDialog dialog npcs =
+advanceDialog : Dialog -> World -> ( Maybe Dialog, World )
+advanceDialog dialog world =
     let
         minAdvanceDuration =
             minDurationToAdvanceDialogText dialog.text
     in
     if dialog.duration > minAdvanceDuration then
         if dialog.queue == [] then
-            ( Nothing, stopNpcTalking dialog.talkingNpcId npcs )
+            ( Nothing, stopNpcTalking dialog.talkingNpcId world )
 
         else
             ( createDialog
@@ -706,28 +724,29 @@ advanceDialog dialog npcs =
                 , texts = dialog.queue
                 , talkingNpcId = dialog.talkingNpcId
                 }
-            , npcs
+            , world
             )
 
     else
-        ( Just { dialog | duration = minAdvanceDuration }, npcs )
+        ( Just { dialog | duration = minAdvanceDuration }, world )
 
 
-stopNpcTalking : Int -> Dict Int Npc -> Dict Int Npc
-stopNpcTalking npcId npcs =
-    Dict.update
-        npcId
-        (Maybe.map
-            (\npc ->
-                case npc.action of
-                    NpcTalking _ ( action, actionTimeLeft ) ->
-                        applyNpcAction action actionTimeLeft npc
+stopNpcTalking : EntityID -> World -> World
+stopNpcTalking npcId world =
+    let
+        newNpcActions =
+            Component.update npcId
+                (\( action, timeLeft ) ->
+                    case action of
+                        NpcTalking _ ( prevAction, prevTimeLeft ) ->
+                            ( prevAction, prevTimeLeft )
 
-                    _ ->
-                        npc
-            )
-        )
-        npcs
+                        _ ->
+                            ( action, timeLeft )
+                )
+                world.npcActions
+    in
+    { world | npcActions = newNpcActions }
 
 
 minDurationToAdvanceDialogText : String -> Float
@@ -756,11 +775,24 @@ createDialog { title, texts, talkingNpcId } =
                 }
 
 
-findNpcToTalkWith : Position -> Dict Int Npc -> Maybe Npc
-findNpcToTalkWith playerPos npcs =
-    npcs
-        |> Dict.values
-        |> List.find (\npc -> isNearby playerPos npc.pos)
+findNpcToTalkWith : Position -> World -> Maybe EntityID
+findNpcToTalkWith playerPos world =
+    System.indexedFoldl2
+        (\npcId _ npcPos result ->
+            case result of
+                Just _ ->
+                    result
+
+                Nothing ->
+                    if isNearby playerPos npcPos then
+                        Just npcId
+
+                    else
+                        Nothing
+        )
+        world.npcActions
+        world.positions
+        Nothing
 
 
 isNearby : Position -> Position -> Bool
