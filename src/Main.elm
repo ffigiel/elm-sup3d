@@ -413,6 +413,7 @@ ecsTick d model =
         newWorld =
             model.world
                 |> npcActionSystem d
+                |> playerMovementSystem d model.pressedKeys model.dialog
     in
     { model | world = newWorld }
 
@@ -448,6 +449,46 @@ npcActionSystem d w =
         positionSpec
         angleSpec
         w
+
+
+playerMovementSystem : Float -> List Keyboard.Key -> Maybe Dialog -> World -> World
+playerMovementSystem d pressedKeys dialog w =
+    case dialog of
+        Just _ ->
+            w
+
+        _ ->
+            let
+                playerSpeed =
+                    1.5
+
+                arrows =
+                    Keyboard.Arrows.arrows pressedKeys
+
+                zeroVector =
+                    Vector3d.meters 0 0 0
+
+                dPos =
+                    Vector3d.meters
+                        (toFloat arrows.x * d * playerSpeed)
+                        (toFloat arrows.y * d * playerSpeed)
+                        0
+            in
+            if dPos == zeroVector then
+                w
+
+            else
+                let
+                    newPositions =
+                        Component.update w.playerId (Vector3d.plus dPos) w.positions
+
+                    newTargetAngle =
+                        angleFromPoints zeroVector dPos
+
+                    newAngles =
+                        Component.update w.playerId (\( a, ta ) -> ( a, newTargetAngle )) w.angles
+                in
+                { w | positions = newPositions, angles = newAngles }
 
 
 gameTick : Float -> Model -> ( Model, Cmd Msg )
