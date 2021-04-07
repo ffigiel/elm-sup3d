@@ -412,43 +412,11 @@ ecsTick d model =
     let
         newWorld =
             model.world
-                |> npcActionSystem d
                 |> playerMovementSystem d model.pressedKeys model.dialog
+                |> npcActionSystem d
+                |> smoothTurnSystem d
     in
     { model | world = newWorld }
-
-
-npcActionSystem : Float -> World -> World
-npcActionSystem d w =
-    System.step3
-        (\( ( action, _ ), _ ) ( pos, setPos ) ( ( angle, _ ), _ ) acc ->
-            case action of
-                NpcPacing _ ->
-                    let
-                        npcSpeed =
-                            0.5
-
-                        dPos =
-                            Vector3d.rThetaOn
-                                SketchPlane3d.xy
-                                (Length.meters <| d * npcSpeed)
-                                angle
-
-                        newPos =
-                            Vector3d.plus
-                                pos
-                                dPos
-                    in
-                    acc
-                        |> setPos newPos
-
-                _ ->
-                    acc
-        )
-        npcActionSpec
-        positionSpec
-        angleSpec
-        w
 
 
 playerMovementSystem : Float -> List Keyboard.Key -> Maybe Dialog -> World -> World
@@ -491,6 +459,73 @@ playerMovementSystem d pressedKeys dialog w =
                 { w | positions = newPositions, angles = newAngles }
 
 
+npcActionSystem : Float -> World -> World
+npcActionSystem d w =
+    System.step3
+        (\( ( action, _ ), _ ) ( pos, setPos ) ( ( angle, _ ), _ ) acc ->
+            case action of
+                NpcPacing _ ->
+                    let
+                        npcSpeed =
+                            0.5
+
+                        dPos =
+                            Vector3d.rThetaOn
+                                SketchPlane3d.xy
+                                (Length.meters <| d * npcSpeed)
+                                angle
+
+                        newPos =
+                            Vector3d.plus
+                                pos
+                                dPos
+                    in
+                    acc
+                        |> setPos newPos
+
+                _ ->
+                    acc
+        )
+        npcActionSpec
+        positionSpec
+        angleSpec
+        w
+
+
+smoothTurnSystem : Float -> World -> World
+smoothTurnSystem d w =
+    System.step
+        (\( angle, targetAngle ) ->
+            let
+                degrees =
+                    Angle.inDegrees angle
+
+                targetDegrees =
+                    Angle.inDegrees targetAngle
+
+                deltaDegrees =
+                    targetDegrees - degrees
+
+                normalizedDeltaDegrees =
+                    if deltaDegrees > 180 then
+                        deltaDegrees - 360
+
+                    else
+                        deltaDegrees
+
+                turnSpeed =
+                    min 1 (d * 3)
+
+                newAngle =
+                    (degrees + (turnSpeed * normalizedDeltaDegrees))
+                        |> Angle.degrees
+            in
+            ( newAngle, targetAngle )
+        )
+        angleSpec
+        w
+
+
 gameTick : Float -> Model -> ( Model, Cmd Msg )
 gameTick d model =
     let
@@ -525,7 +560,6 @@ gameTick d model =
         newPlayer =
             { player
                 | pos = newPlayerPos
-                , angle = angleTick d ( model.player.angle, newPlayerTargetAngle )
                 , targetAngle = newPlayerTargetAngle
             }
 
@@ -566,44 +600,12 @@ npcsTick d npcs =
 
 npcTick : Float -> Npc -> ( Npc, Cmd Msg )
 npcTick d npc =
-    let
-        newNpc =
-            { npc
-                | angle = angleTick d ( npc.angle, npc.targetAngle )
-            }
-    in
-    case newNpc.action of
+    case npc.action of
         NpcTalking _ _ ->
-            ( newNpc, Cmd.none )
+            ( npc, Cmd.none )
 
         _ ->
-            npcTickAction d { newNpc | actionTimeLeft = newNpc.actionTimeLeft - d }
-
-
-angleTick : Float -> ( Angle, Angle ) -> Angle
-angleTick d ( angle, targetAngle ) =
-    let
-        degrees =
-            Angle.inDegrees angle
-
-        targetDegrees =
-            Angle.inDegrees targetAngle
-
-        deltaDegrees =
-            targetDegrees - degrees
-
-        normalizedDeltaDegrees =
-            if deltaDegrees > 180 then
-                deltaDegrees - 360
-
-            else
-                deltaDegrees
-
-        turnSpeed =
-            min 1 (d * 4)
-    in
-    (degrees + (turnSpeed * normalizedDeltaDegrees))
-        |> Angle.degrees
+            npcTickAction d { npc | actionTimeLeft = npc.actionTimeLeft - d }
 
 
 npcTickAction : Float -> Npc -> ( Npc, Cmd Msg )
