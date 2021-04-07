@@ -7,7 +7,6 @@ import Browser.Dom
 import Browser.Events
 import Camera3d
 import Color exposing (Color)
-import Dict exposing (Dict)
 import Direction3d
 import Html exposing (Html)
 import Html.Attributes as HA
@@ -80,7 +79,6 @@ type alias Model =
     , textures : Textures
     , floor : Maybe Shape
     , nextNpcId : Int
-    , npcs : Dict Int Npc
     , dialog : Maybe Dialog
     , world : World
     }
@@ -92,19 +90,6 @@ type alias Dialog =
     , duration : Float
     , queue : List String
     , talkingNpcId : EntityID
-    }
-
-
-type alias Npc =
-    { id : Int
-    , name : String
-    , entity : Shape
-    , pos : Position
-    , angle : Angle
-    , targetAngle : Angle
-    , dialog : List String
-    , action : NpcAction
-    , actionTimeLeft : Float
     }
 
 
@@ -156,7 +141,6 @@ init _ =
             , textures = textures
             , floor = Nothing
             , nextNpcId = 0
-            , npcs = Dict.empty
             , dialog = Nothing
             , world = initWorld
             }
@@ -164,25 +148,6 @@ init _ =
         textures =
             { grass = Nothing
             , water = Nothing
-            }
-
-        npc1 =
-            { name = "Viola"
-            , color = Color.purple
-            , pos = Vector3d.meters 4 12 0
-            , dialog =
-                [ "Hey!"
-                , "What's up?"
-                ]
-            }
-
-        npc2 =
-            { name = "Redd"
-            , color = Color.darkRed
-            , pos = Vector3d.meters 14 6 0
-            , dialog =
-                [ "Sup."
-                ]
             }
 
         textureCmds =
@@ -199,39 +164,7 @@ init _ =
             Cmd.batch
                 (getViewport :: textureCmds)
     in
-    ( model
-        |> addNpc npc1
-        |> addNpc npc2
-    , cmd
-    )
-
-
-addNpc :
-    { name : String
-    , color : Color
-    , pos : Position
-    , dialog : List String
-    }
-    -> Model
-    -> Model
-addNpc { name, color, pos, dialog } model =
-    let
-        npc =
-            { id = model.nextNpcId
-            , name = name
-            , entity = makeCube color
-            , pos = pos
-            , dialog = dialog
-            , angle = Angle.degrees 90
-            , targetAngle = Angle.degrees 90
-            , action = NpcWaiting
-            , actionTimeLeft = 0
-            }
-    in
-    { model
-        | nextNpcId = model.nextNpcId + 1
-        , npcs = Dict.insert npc.id npc model.npcs
-    }
+    ( model, cmd )
 
 
 getViewport : Cmd Msg
@@ -444,7 +377,7 @@ playerMovementSystem d pressedKeys dialog w =
                         angleFromPoints zeroVector dPos
 
                     newAngles =
-                        Component.update w.playerId (\( a, ta ) -> ( a, newTargetAngle )) w.angles
+                        Component.update w.playerId (\( a, _ ) -> ( a, newTargetAngle )) w.angles
                 in
                 { w | positions = newPositions, angles = newAngles }
 
@@ -536,7 +469,7 @@ gameTick d model =
 npcBehaviorCmd : World -> Cmd Msg
 npcBehaviorCmd w =
     System.indexedFoldl
-        (\npcId ( action, until ) acc ->
+        (\npcId ( _, until ) acc ->
             if until < w.time then
                 prepareNewNpcAction npcId :: acc
 
@@ -657,25 +590,28 @@ findNewDialog world =
                     ( Nothing, world )
 
 
-applyNpcAction : NpcAction -> Float -> Npc -> Npc
-applyNpcAction action actionTimeLeft npc =
-    let
-        newTargetAngle =
-            case action of
-                NpcPacing angle ->
-                    angle
 
-                NpcTalking angle _ ->
-                    angle
+{- TODO: rewrite for ECS
+   applyNpcAction : NpcAction -> Float -> Npc -> Npc
+   applyNpcAction action actionTimeLeft npc =
+       let
+           newTargetAngle =
+               case action of
+                   NpcPacing angle ->
+                       angle
 
-                _ ->
-                    npc.targetAngle
-    in
-    { npc
-        | action = action
-        , actionTimeLeft = actionTimeLeft
-        , targetAngle = newTargetAngle
-    }
+                   NpcTalking angle _ ->
+                       angle
+
+                   _ ->
+                       npc.targetAngle
+       in
+       { npc
+           | action = action
+           , actionTimeLeft = actionTimeLeft
+           , targetAngle = newTargetAngle
+       }
+-}
 
 
 angleFromPoints : Position -> Position -> Angle
@@ -1083,7 +1019,7 @@ gameView model floor =
         [ fpsView model.deltas
         , dialogView model.dialog
         , Scene3d.custom
-            { entities = [ floor ] ++ shapes
+            { entities = floor :: shapes
             , camera = camera
             , background = Scene3d.backgroundColor Color.black
             , clipDepth = Length.meters 0.01
