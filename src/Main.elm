@@ -77,7 +77,6 @@ type alias Model =
     , height : Int
     , pressedKeys : List Keyboard.Key
     , keyChange : Maybe Keyboard.KeyChange
-    , player : Player
     , loadingErrors : List String
     , textures : Textures
     , floor : Maybe Shape
@@ -94,14 +93,6 @@ type alias Dialog =
     , duration : Float
     , queue : List String
     , talkingNpcId : Int
-    }
-
-
-type alias Player =
-    { entity : Shape
-    , pos : Position
-    , angle : Angle
-    , targetAngle : Angle
     }
 
 
@@ -163,7 +154,6 @@ init _ =
             , height = 0
             , pressedKeys = []
             , keyChange = Nothing
-            , player = player
             , loadingErrors = []
             , textures = textures
             , floor = Nothing
@@ -171,13 +161,6 @@ init _ =
             , npcs = Dict.empty
             , dialog = Nothing
             , world = initWorld
-            }
-
-        player =
-            { entity = makeCube Color.lightBlue
-            , angle = Angle.degrees 0
-            , targetAngle = Angle.degrees 0
-            , pos = Vector3d.meters 8 8 0
             }
 
         textures =
@@ -650,32 +633,37 @@ keyEvent model =
 
 findNewDialog : Model -> ( Maybe Dialog, Dict Int Npc )
 findNewDialog model =
-    case findNpcToTalkWith model.player model.npcs of
-        Just talkingNpc ->
-            let
-                newAngle =
-                    angleFromPoints talkingNpc.pos model.player.pos
-
-                newAction =
-                    NpcTalking newAngle ( talkingNpc.action, talkingNpc.actionTimeLeft )
-
-                newNpcs =
-                    Dict.update
-                        talkingNpc.id
-                        (Maybe.map <| applyNpcAction newAction 0)
-                        model.npcs
-
-                dialog =
-                    createDialog
-                        { title = talkingNpc.name
-                        , texts = talkingNpc.dialog
-                        , talkingNpcId = talkingNpc.id
-                        }
-            in
-            ( dialog, newNpcs )
-
+    case Component.get model.world.playerId model.world.positions of
         Nothing ->
             ( Nothing, model.npcs )
+
+        Just playerPos ->
+            case findNpcToTalkWith playerPos model.npcs of
+                Just talkingNpc ->
+                    let
+                        newAngle =
+                            angleFromPoints talkingNpc.pos playerPos
+
+                        newAction =
+                            NpcTalking newAngle ( talkingNpc.action, talkingNpc.actionTimeLeft )
+
+                        newNpcs =
+                            Dict.update
+                                talkingNpc.id
+                                (Maybe.map <| applyNpcAction newAction 0)
+                                model.npcs
+
+                        dialog =
+                            createDialog
+                                { title = talkingNpc.name
+                                , texts = talkingNpc.dialog
+                                , talkingNpcId = talkingNpc.id
+                                }
+                    in
+                    ( dialog, newNpcs )
+
+                Nothing ->
+                    ( Nothing, model.npcs )
 
 
 applyNpcAction : NpcAction -> Float -> Npc -> Npc
@@ -774,11 +762,11 @@ createDialog { title, texts, talkingNpcId } =
                 }
 
 
-findNpcToTalkWith : Player -> Dict Int Npc -> Maybe Npc
-findNpcToTalkWith player npcs =
+findNpcToTalkWith : Position -> Dict Int Npc -> Maybe Npc
+findNpcToTalkWith playerPos npcs =
     npcs
         |> Dict.values
-        |> List.find (\npc -> isNearby player.pos npc.pos)
+        |> List.find (\npc -> isNearby playerPos npc.pos)
 
 
 isNearby : Position -> Position -> Bool
