@@ -292,6 +292,7 @@ update msg model =
     case msg of
         Tick d ->
             { model | time = model.time + d }
+                |> ecsTick d
                 |> gameTick d
 
         Resized ->
@@ -404,6 +405,49 @@ updateFloor model =
 
 
 -- TICK
+
+
+ecsTick : Float -> Model -> Model
+ecsTick d model =
+    let
+        newWorld =
+            model.world
+                |> npcActionSystem d
+    in
+    { model | world = newWorld }
+
+
+npcActionSystem : Float -> World -> World
+npcActionSystem d w =
+    System.step3
+        (\( ( action, _ ), _ ) ( pos, setPos ) ( ( angle, _ ), _ ) acc ->
+            case action of
+                NpcPacing _ ->
+                    let
+                        npcSpeed =
+                            0.5
+
+                        dPos =
+                            Vector3d.rThetaOn
+                                SketchPlane3d.xy
+                                (Length.meters <| d * npcSpeed)
+                                angle
+
+                        newPos =
+                            Vector3d.plus
+                                pos
+                                dPos
+                    in
+                    acc
+                        |> setPos newPos
+
+                _ ->
+                    acc
+        )
+        npcActionSpec
+        positionSpec
+        angleSpec
+        w
 
 
 gameTick : Float -> Model -> ( Model, Cmd Msg )
