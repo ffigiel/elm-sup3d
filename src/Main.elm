@@ -1052,8 +1052,12 @@ gameView model floor =
                 (positionSpec.get model.world)
                 []
 
+        playerPos =
+            Component.get model.world.playerId model.world.positions
+                |> Maybe.withDefault (Vector3d.meters 0 0 0)
+
         cameraPos =
-            Point3d.translateBy model.player.pos Point3d.origin
+            Point3d.translateBy playerPos Point3d.origin
 
         camera =
             Camera3d.perspective
@@ -1260,6 +1264,7 @@ type alias World =
     , names : Component.Set String
     , dialogs : Component.Set (List String)
     , npcActions : Component.Set ( NpcAction, Float )
+    , playerId : EntityID
     }
 
 
@@ -1281,6 +1286,7 @@ initWorld =
             , names = Component.empty
             , dialogs = Component.empty
             , npcActions = Component.empty
+            , playerId = -1
             }
 
         npcData : List NpcData
@@ -1317,7 +1323,7 @@ initWorld =
 
         playerEntity : ( EntityID, World ) -> ( EntityID, World )
         playerEntity ( i, w ) =
-            Entity.create (i + 1) w
+            Entity.create (i + 1) { w | playerId = i + 1 }
                 |> Entity.with ( shapeSpec, makeCube Color.lightBlue )
                 |> Entity.with ( positionSpec, Vector3d.meters 8 8 0 )
                 |> Entity.with ( angleSpec, ( initAngle, initAngle ) )
