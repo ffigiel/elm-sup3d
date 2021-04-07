@@ -571,35 +571,7 @@ npcTickAction d npc =
         ( npc, prepareNewNpcAction npc )
 
     else
-        let
-            newNpc =
-                case npc.action of
-                    NpcWaiting ->
-                        npc
-
-                    NpcPacing _ ->
-                        let
-                            npcSpeed =
-                                0.5
-
-                            dPos =
-                                Vector3d.rThetaOn
-                                    SketchPlane3d.xy
-                                    (Length.meters <| d * npcSpeed)
-                                    npc.angle
-
-                            newPos =
-                                Vector3d.plus
-                                    npc.pos
-                                    dPos
-                        in
-                        { npc | pos = newPos }
-
-                    NpcTalking _ _ ->
-                        -- This branch was handled elsewhere and should never be reached
-                        npc
-        in
-        ( newNpc, Cmd.none )
+        ( npc, Cmd.none )
 
 
 prepareNewNpcAction : Npc -> Cmd Msg
