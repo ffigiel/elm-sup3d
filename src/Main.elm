@@ -512,12 +512,6 @@ smoothTurnSystem d w =
 gameTick : Float -> Model -> ( Model, Cmd Msg )
 gameTick d model =
     let
-        playerSpeed =
-            1.5
-
-        arrows =
-            Keyboard.Arrows.arrows model.pressedKeys
-
         ( newNpcs, npcCmds ) =
             npcsTick d model.npcs
 
