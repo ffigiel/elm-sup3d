@@ -283,7 +283,7 @@ update msg model =
                     Component.set npcId ( action, world.time + duration ) model.world.npcActions
 
                 newWorld =
-                    { world | npcActions = newNpcActions }
+                    applyNpcAction action (world.time + duration) npcId model.world
             in
             ( { model | world = newWorld }, Cmd.none )
 
@@ -590,28 +590,35 @@ findNewDialog world =
                     ( Nothing, world )
 
 
+applyNpcAction : NpcAction -> Float -> EntityID -> World -> World
+applyNpcAction action until npcId w =
+    case Component.get npcId w.angles of
+        Nothing ->
+            w
 
-{- TODO: rewrite for ECS
-   applyNpcAction : NpcAction -> Float -> Npc -> Npc
-   applyNpcAction action actionTimeLeft npc =
-       let
-           newTargetAngle =
-               case action of
-                   NpcPacing angle ->
-                       angle
+        Just ( angle, targetAngle ) ->
+            let
+                newTargetAngle =
+                    case action of
+                        NpcPacing a ->
+                            a
 
-                   NpcTalking angle _ ->
-                       angle
+                        NpcTalking a _ ->
+                            a
 
-                   _ ->
-                       npc.targetAngle
-       in
-       { npc
-           | action = action
-           , actionTimeLeft = actionTimeLeft
-           , targetAngle = newTargetAngle
-       }
--}
+                        _ ->
+                            targetAngle
+
+                newAngles =
+                    Component.set npcId ( angle, newTargetAngle ) w.angles
+
+                newNpcActions =
+                    Component.set npcId ( action, until ) w.npcActions
+            in
+            { w
+                | angles = newAngles
+                , npcActions = newNpcActions
+            }
 
 
 angleFromPoints : Position -> Position -> Angle
