@@ -71,8 +71,7 @@ type alias Shape =
 
 
 type alias Model =
-    { time : Float -- in seconds
-    , deltas : List Float
+    { deltas : List Float
     , width : Int
     , height : Int
     , pressedKeys : List Keyboard.Key
@@ -148,8 +147,7 @@ init _ =
     let
         model : Model
         model =
-            { time = 0
-            , deltas = []
+            { deltas = []
             , width = 0
             , height = 0
             , pressedKeys = []
@@ -274,7 +272,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Tick d ->
-            { model | time = model.time + d }
+            model
                 |> ecsTick d
                 |> gameTick d
 
@@ -343,15 +341,18 @@ update msg model =
                     in
                     ( { model | loadingErrors = model.loadingErrors ++ [ newError ] }, Cmd.none )
 
-        GotNpcAction npcId ( action, actionTimeLeft ) ->
+        GotNpcAction npcId ( action, duration ) ->
             let
-                newNpcs =
-                    Dict.update
-                        npcId
-                        (Maybe.map <| applyNpcAction action actionTimeLeft)
-                        model.npcs
+                world =
+                    model.world
+
+                newNpcActions =
+                    Component.set npcId ( action, world.time + duration ) model.world.npcActions
+
+                newWorld =
+                    { world | npcActions = newNpcActions }
             in
-            ( { model | npcs = newNpcs }, Cmd.none )
+            ( { model | world = newWorld }, Cmd.none )
 
 
 updateDeltas : Float -> Model -> Model
@@ -395,11 +396,17 @@ ecsTick d model =
     let
         newWorld =
             model.world
+                |> timeSystem d
                 |> playerMovementSystem d model.pressedKeys model.dialog
                 |> npcActionSystem d
                 |> smoothTurnSystem d
     in
     { model | world = newWorld }
+
+
+timeSystem : Float -> World -> World
+timeSystem d w =
+    { w | time = w.time + d }
 
 
 playerMovementSystem : Float -> List Keyboard.Key -> Maybe Dialog -> World -> World
@@ -512,88 +519,60 @@ smoothTurnSystem d w =
 gameTick : Float -> Model -> ( Model, Cmd Msg )
 gameTick d model =
     let
-        ( newNpcs, npcCmds ) =
-            npcsTick d model.npcs
-
         newDialog =
             Maybe.map (\dialog -> { dialog | duration = dialog.duration + d }) model.dialog
 
         newModel =
             { model
-                | npcs = newNpcs
-                , dialog = newDialog
+                | dialog = newDialog
             }
 
         cmd =
-            Cmd.batch npcCmds
+            npcBehaviorCmd model.world
     in
     ( newModel |> updateDeltas d, cmd )
 
 
-npcsTick : Float -> Dict Int Npc -> ( Dict Int Npc, List (Cmd Msg) )
-npcsTick d npcs =
-    let
-        ( npcValues, cmds ) =
-            Dict.values npcs
-                |> List.map (npcTick d)
-                |> List.unzip
+npcBehaviorCmd : World -> Cmd Msg
+npcBehaviorCmd w =
+    System.indexedFoldl
+        (\npcId ( action, until ) acc ->
+            if until < w.time then
+                prepareNewNpcAction npcId :: acc
 
-        newNpcs =
-            npcValues
-                |> List.map (\n -> ( n.id, n ))
-                |> Dict.fromList
-    in
-    ( newNpcs, cmds )
-
-
-npcTick : Float -> Npc -> ( Npc, Cmd Msg )
-npcTick d npc =
-    case npc.action of
-        NpcTalking _ _ ->
-            ( npc, Cmd.none )
-
-        _ ->
-            npcTickAction d { npc | actionTimeLeft = npc.actionTimeLeft - d }
+            else
+                acc
+        )
+        w.npcActions
+        []
+        |> Cmd.batch
 
 
-npcTickAction : Float -> Npc -> ( Npc, Cmd Msg )
-npcTickAction d npc =
-    if npc.actionTimeLeft <= 0 then
-        ( npc, prepareNewNpcAction npc )
-
-    else
-        ( npc, Cmd.none )
+prepareNewNpcAction : EntityID -> Cmd Msg
+prepareNewNpcAction npcId =
+    Random.generate (GotNpcAction npcId) genNpcAction
 
 
-prepareNewNpcAction : Npc -> Cmd Msg
-prepareNewNpcAction npc =
-    Random.generate (GotNpcAction npc.id) (genNpcAction npc)
-
-
-genNpcAction : Npc -> Random.Generator ( NpcAction, Float )
-genNpcAction npc =
+genNpcAction : Random.Generator ( NpcAction, Float )
+genNpcAction =
     Random.weighted
-        ( 2, genNpcWaiting npc )
-        [ ( 3, genNpcPacing npc )
+        ( 2, genNpcWaiting )
+        [ ( 3, genNpcPacing )
         ]
         |> Random.andThen identity
 
 
-genNpcWaiting : Npc -> Random.Generator ( NpcAction, Float )
-genNpcWaiting _ =
+genNpcWaiting : Random.Generator ( NpcAction, Float )
+genNpcWaiting =
     Random.map
         (\duration -> ( NpcWaiting, duration ))
         (Random.float 1 4)
 
 
-genNpcPacing : Npc -> Random.Generator ( NpcAction, Float )
-genNpcPacing npc =
-    let
-        npcDegrees =
-            Angle.inDegrees npc.angle
-    in
+genNpcPacing : Random.Generator ( NpcAction, Float )
+genNpcPacing =
     Random.map2 (\angle duration -> ( NpcPacing angle, duration ))
-        (Random.float (npcDegrees - 60) (npcDegrees + 60) |> Random.map Angle.degrees)
+        (Random.float -60 60 |> Random.map Angle.degrees)
         (Random.float 1 3)
 
 
@@ -652,8 +631,8 @@ findNewDialog world =
 
                                 newActions =
                                     Component.update npcId
-                                        (\( action, timeLeft ) ->
-                                            ( NpcTalking newAngle ( action, timeLeft )
+                                        (\( action, until ) ->
+                                            ( NpcTalking newAngle ( action, until )
                                             , 0
                                             )
                                         )
@@ -736,13 +715,13 @@ stopNpcTalking npcId world =
     let
         newNpcActions =
             Component.update npcId
-                (\( action, timeLeft ) ->
+                (\( action, until ) ->
                     case action of
-                        NpcTalking _ ( prevAction, prevTimeLeft ) ->
-                            ( prevAction, prevTimeLeft )
+                        NpcTalking _ ( prevAction, prevUntil ) ->
+                            ( prevAction, prevUntil )
 
                         _ ->
-                            ( action, timeLeft )
+                            ( action, until )
                 )
                 world.npcActions
     in
@@ -1109,7 +1088,7 @@ gameView model floor =
             , background = Scene3d.backgroundColor Color.black
             , clipDepth = Length.meters 0.01
             , dimensions = ( Pixels.int 800, Pixels.int 480 )
-            , lights = getLights model.time
+            , lights = getLights model.world.time
             , exposure = Scene3d.exposureValue 5
             , whiteBalance = Light.skylight
             , antialiasing = Scene3d.multisampling
@@ -1286,7 +1265,8 @@ getLights t =
 
 
 type alias World =
-    { shapes : Component.Set Shape
+    { time : Float -- in seconds
+    , shapes : Component.Set Shape
     , positions : Component.Set Position
     , angles : Component.Set ( Angle, Angle )
     , names : Component.Set String
@@ -1308,7 +1288,8 @@ initWorld : World
 initWorld =
     let
         world =
-            { shapes = Component.empty
+            { time = 0
+            , shapes = Component.empty
             , positions = Component.empty
             , angles = Component.empty
             , names = Component.empty
