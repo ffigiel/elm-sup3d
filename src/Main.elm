@@ -660,44 +660,55 @@ findNewDialog world =
                 )
     of
         Just ( playerPos, npcId ) ->
-            case
-                Maybe.map3
-                    (\pos ( npcAction, npcActionUntil ) meta ->
-                        { pos = pos
-                        , npcAction = npcAction
-                        , npcActionUntil = npcActionUntil
-                        , meta = meta
-                        }
-                    )
-                    (Component.get npcId world.positions)
-                    (Component.get npcId world.npcActions)
-                    (Component.get npcId world.npcMetas)
-            of
-                Just { pos, npcAction, npcActionUntil, meta } ->
-                    let
-                        newAngle =
-                            angleFromPoints pos playerPos
-
-                        newNpcAction =
-                            NpcTalking newAngle ( npcAction, npcActionUntil )
-
-                        newWorld =
-                            applyNpcAction newNpcAction 0 npcId world
-
-                        dialog =
-                            createDialog
-                                { title = meta.name
-                                , texts = meta.dialog
-                                , talkingNpcId = npcId
-                                }
-                    in
-                    ( dialog, newWorld )
-
-                Nothing ->
-                    ( Nothing, world )
+            Maybe.map3
+                (\pos ( npcAction, npcActionUntil ) meta ->
+                    { id = npcId
+                    , pos = pos
+                    , action = npcAction
+                    , actionUntil = npcActionUntil
+                    , meta = meta
+                    }
+                )
+                (Component.get npcId world.positions)
+                (Component.get npcId world.npcActions)
+                (Component.get npcId world.npcMetas)
+                |> Maybe.map (startNpcDialog playerPos world)
+                |> Maybe.withDefault ( Nothing, world )
 
         Nothing ->
             ( Nothing, world )
+
+
+startNpcDialog :
+    Position
+    -> World
+    ->
+        { id : EntityID
+        , pos : Position
+        , action : NpcAction
+        , actionUntil : Float
+        , meta : NpcMeta
+        }
+    -> ( Maybe Dialog, World )
+startNpcDialog playerPos world npc =
+    let
+        newAngle =
+            angleFromPoints npc.pos playerPos
+
+        newNpcAction =
+            NpcTalking newAngle ( npc.action, npc.actionUntil )
+
+        newWorld =
+            applyNpcAction newNpcAction 0 npc.id world
+
+        dialog =
+            createDialog
+                { title = npc.meta.name
+                , texts = npc.meta.dialog
+                , talkingNpcId = npc.id
+                }
+    in
+    ( dialog, newWorld )
 
 
 applyNpcAction : NpcAction -> Float -> EntityID -> World -> World
