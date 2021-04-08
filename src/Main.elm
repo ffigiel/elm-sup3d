@@ -438,7 +438,7 @@ ecsTick d model =
         newWorld =
             model.world
                 |> timeSystem d
-                |> playerMovementSystem d model.pressedKeys model.dialog
+                |> System.applyIf (model.dialog == Nothing) (playerMovementSystem d model.pressedKeys)
                 |> npcActionSystem d
                 |> smoothTurnSystem d
     in
@@ -450,44 +450,39 @@ timeSystem d w =
     { w | time = w.time + d }
 
 
-playerMovementSystem : Float -> List Keyboard.Key -> Maybe Dialog -> World -> World
-playerMovementSystem d pressedKeys dialog w =
-    case dialog of
-        Just _ ->
-            w
+playerMovementSystem : Float -> List Keyboard.Key -> World -> World
+playerMovementSystem d pressedKeys w =
+    let
+        playerSpeed =
+            1.5
 
-        _ ->
-            let
-                playerSpeed =
-                    1.5
+        arrows =
+            Keyboard.Arrows.arrows pressedKeys
 
-                arrows =
-                    Keyboard.Arrows.arrows pressedKeys
+        zeroVector =
+            Vector3d.meters 0 0 0
 
-                zeroVector =
-                    Vector3d.meters 0 0 0
+        dPos =
+            Vector3d.meters
+                (toFloat arrows.x * d * playerSpeed)
+                (toFloat arrows.y * d * playerSpeed)
+                0
+    in
+    if dPos == zeroVector then
+        w
 
-                dPos =
-                    Vector3d.meters
-                        (toFloat arrows.x * d * playerSpeed)
-                        (toFloat arrows.y * d * playerSpeed)
-                        0
-            in
-            if dPos == zeroVector then
-                w
+    else
+        let
+            newPositions =
+                Component.update w.playerId (Vector3d.plus dPos) w.positions
 
-            else
-                let
-                    newPositions =
-                        Component.update w.playerId (Vector3d.plus dPos) w.positions
+            newTargetAngle =
+                angleFromPoints zeroVector dPos
 
-                    newTargetAngle =
-                        angleFromPoints zeroVector dPos
-
-                    newAngles =
-                        Component.update w.playerId (\( a, _ ) -> ( a, newTargetAngle )) w.angles
-                in
-                { w | positions = newPositions, angles = newAngles }
+            newAngles =
+                Component.update w.playerId (\( a, _ ) -> ( a, newTargetAngle )) w.angles
+        in
+        { w | positions = newPositions, angles = newAngles }
 
 
 npcActionSystem : Float -> World -> World
