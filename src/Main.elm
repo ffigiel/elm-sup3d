@@ -651,20 +651,12 @@ advanceDialog dialog world =
 
 stopNpcTalking : EntityID -> World -> World
 stopNpcTalking npcId world =
-    let
-        newNpcActions =
-            Component.update npcId
-                (\( action, until ) ->
-                    case action of
-                        NpcTalking _ ( prevAction, prevUntil ) ->
-                            ( prevAction, prevUntil )
+    case Component.get npcId world.npcActions of
+        Just ( NpcTalking _ ( prevAction, prevUntil ), _ ) ->
+            applyNpcAction prevAction prevUntil npcId world
 
-                        _ ->
-                            ( action, until )
-                )
-                world.npcActions
-    in
-    { world | npcActions = newNpcActions }
+        _ ->
+            world
 
 
 minDurationToAdvanceDialogText : String -> Float
