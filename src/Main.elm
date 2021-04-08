@@ -88,6 +88,30 @@ type alias Dialog =
     }
 
 
+type alias World =
+    { time : Float -- in seconds
+    , shapes : Component.Set Shape
+    , positions : Component.Set Position
+    , angles : Component.Set ( Angle, Angle )
+    , npcActions : Component.Set ( NpcAction, Float )
+    , npcMetas : Component.Set NpcMeta
+    , playerId : EntityID
+    }
+
+
+type alias NpcData =
+    { color : Color
+    , pos : Position
+    , meta : NpcMeta
+    }
+
+
+type alias NpcMeta =
+    { name : String
+    , dialog : List String
+    }
+
+
 type NpcAction
     = NpcWaiting
     | NpcPacing Angle
@@ -159,6 +183,67 @@ init _ =
                 (getViewport :: textureCmds)
     in
     ( model, cmd )
+
+
+initWorld : World
+initWorld =
+    let
+        world =
+            { time = 0
+            , shapes = Component.empty
+            , positions = Component.empty
+            , angles = Component.empty
+            , npcActions = Component.empty
+            , npcMetas = Component.empty
+            , playerId = -1
+            }
+
+        npcData : List NpcData
+        npcData =
+            [ { color = Color.purple
+              , pos = Vector3d.meters 4 12 0
+              , meta =
+                    { name = "Viola"
+                    , dialog =
+                        [ "Hey!"
+                        , "What's up?"
+                        ]
+                    }
+              }
+            , { color = Color.darkRed
+              , pos = Vector3d.meters 14 6 0
+              , meta =
+                    { name = "Redd"
+                    , dialog =
+                        [ "Sup."
+                        ]
+                    }
+              }
+            ]
+
+        initAngle =
+            Angle.degrees 90
+
+        npcEntity : NpcData -> ( EntityID, World ) -> ( EntityID, World )
+        npcEntity { color, pos, meta } ( i, w ) =
+            Entity.create (i + 1) w
+                |> Entity.with ( shapeSpec, makeCube color )
+                |> Entity.with ( positionSpec, pos )
+                |> Entity.with ( angleSpec, ( initAngle, initAngle ) )
+                |> Entity.with ( npcActionSpec, ( NpcWaiting, 0 ) )
+                |> Entity.with ( npcMetaSpec, meta )
+
+        playerEntity : ( EntityID, World ) -> ( EntityID, World )
+        playerEntity ( i, w ) =
+            Entity.create (i + 1) { w | playerId = i + 1 }
+                |> Entity.with ( shapeSpec, makeCube Color.lightBlue )
+                |> Entity.with ( positionSpec, Vector3d.meters 8 8 0 )
+                |> Entity.with ( angleSpec, ( initAngle, initAngle ) )
+    in
+    ( 0, world )
+        |> (\a -> List.foldl npcEntity a npcData)
+        |> playerEntity
+        |> Tuple.second
 
 
 getViewport : Cmd Msg
@@ -309,6 +394,38 @@ updateFloor model =
 
         _ ->
             model
+
+
+
+-- ECS
+
+
+shapeSpec : Component.Spec Shape { w | shapes : Component.Set Shape }
+shapeSpec =
+    Component.Spec .shapes (\c w -> { w | shapes = c })
+
+
+positionSpec : Component.Spec Position { w | positions : Component.Set Position }
+positionSpec =
+    Component.Spec .positions (\c w -> { w | positions = c })
+
+
+angleSpec : Component.Spec ( Angle, Angle ) { w | angles : Component.Set ( Angle, Angle ) }
+angleSpec =
+    Component.Spec .angles (\c w -> { w | angles = c })
+
+
+npcActionSpec :
+    Component.Spec
+        ( NpcAction, Float )
+        { w | npcActions : Component.Set ( NpcAction, Float ) }
+npcActionSpec =
+    Component.Spec .npcActions (\c w -> { w | npcActions = c })
+
+
+npcMetaSpec : Component.Spec NpcMeta { w | npcMetas : Component.Set NpcMeta }
+npcMetaSpec =
+    Component.Spec .npcMetas (\c w -> { w | npcMetas = c })
 
 
 
@@ -1191,120 +1308,3 @@ getLights t =
                 }
     in
     Scene3d.twoLights sunOrMoon softLighting
-
-
-
--- ECS
-
-
-type alias World =
-    { time : Float -- in seconds
-    , shapes : Component.Set Shape
-    , positions : Component.Set Position
-    , angles : Component.Set ( Angle, Angle )
-    , npcActions : Component.Set ( NpcAction, Float )
-    , npcMetas : Component.Set NpcMeta
-    , playerId : EntityID
-    }
-
-
-type alias NpcData =
-    { color : Color
-    , pos : Position
-    , meta : NpcMeta
-    }
-
-
-type alias NpcMeta =
-    { name : String
-    , dialog : List String
-    }
-
-
-initWorld : World
-initWorld =
-    let
-        world =
-            { time = 0
-            , shapes = Component.empty
-            , positions = Component.empty
-            , angles = Component.empty
-            , npcActions = Component.empty
-            , npcMetas = Component.empty
-            , playerId = -1
-            }
-
-        npcData : List NpcData
-        npcData =
-            [ { color = Color.purple
-              , pos = Vector3d.meters 4 12 0
-              , meta =
-                    { name = "Viola"
-                    , dialog =
-                        [ "Hey!"
-                        , "What's up?"
-                        ]
-                    }
-              }
-            , { color = Color.darkRed
-              , pos = Vector3d.meters 14 6 0
-              , meta =
-                    { name = "Redd"
-                    , dialog =
-                        [ "Sup."
-                        ]
-                    }
-              }
-            ]
-
-        initAngle =
-            Angle.degrees 90
-
-        npcEntity : NpcData -> ( EntityID, World ) -> ( EntityID, World )
-        npcEntity { color, pos, meta } ( i, w ) =
-            Entity.create (i + 1) w
-                |> Entity.with ( shapeSpec, makeCube color )
-                |> Entity.with ( positionSpec, pos )
-                |> Entity.with ( angleSpec, ( initAngle, initAngle ) )
-                |> Entity.with ( npcActionSpec, ( NpcWaiting, 0 ) )
-                |> Entity.with ( npcMetaSpec, meta )
-
-        playerEntity : ( EntityID, World ) -> ( EntityID, World )
-        playerEntity ( i, w ) =
-            Entity.create (i + 1) { w | playerId = i + 1 }
-                |> Entity.with ( shapeSpec, makeCube Color.lightBlue )
-                |> Entity.with ( positionSpec, Vector3d.meters 8 8 0 )
-                |> Entity.with ( angleSpec, ( initAngle, initAngle ) )
-    in
-    ( 0, world )
-        |> (\a -> List.foldl npcEntity a npcData)
-        |> playerEntity
-        |> Tuple.second
-
-
-shapeSpec : Component.Spec Shape { w | shapes : Component.Set Shape }
-shapeSpec =
-    Component.Spec .shapes (\c w -> { w | shapes = c })
-
-
-positionSpec : Component.Spec Position { w | positions : Component.Set Position }
-positionSpec =
-    Component.Spec .positions (\c w -> { w | positions = c })
-
-
-angleSpec : Component.Spec ( Angle, Angle ) { w | angles : Component.Set ( Angle, Angle ) }
-angleSpec =
-    Component.Spec .angles (\c w -> { w | angles = c })
-
-
-npcActionSpec :
-    Component.Spec
-        ( NpcAction, Float )
-        { w | npcActions : Component.Set ( NpcAction, Float ) }
-npcActionSpec =
-    Component.Spec .npcActions (\c w -> { w | npcActions = c })
-
-
-npcMetaSpec : Component.Spec NpcMeta { w | npcMetas : Component.Set NpcMeta }
-npcMetaSpec =
-    Component.Spec .npcMetas (\c w -> { w | npcMetas = c })
