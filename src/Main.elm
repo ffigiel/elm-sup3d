@@ -279,9 +279,6 @@ update msg model =
                 world =
                     model.world
 
-                newNpcActions =
-                    Component.set npcId ( action, world.time + duration ) model.world.npcActions
-
                 newWorld =
                     applyNpcAction action (world.time + duration) npcId model.world
             in
