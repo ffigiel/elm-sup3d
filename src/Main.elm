@@ -656,53 +656,55 @@ keyEvent model =
 
 findNewDialog : World -> ( Maybe Dialog, World )
 findNewDialog world =
-    case Component.get world.playerId world.positions of
+    case
+        Component.get world.playerId world.positions
+            |> Maybe.andThen
+                (\playerPos ->
+                    findNpcToTalkWith playerPos world
+                        |> Maybe.map (Tuple.pair playerPos)
+                )
+    of
+        Just ( playerPos, npcId ) ->
+            let
+                maybeNpc =
+                    Maybe.map3
+                        (\pos ( npcAction, npcActionUntil ) meta ->
+                            { pos = pos
+                            , npcAction = npcAction
+                            , npcActionUntil = npcActionUntil
+                            , meta = meta
+                            }
+                        )
+                        (Component.get npcId world.positions)
+                        (Component.get npcId world.npcActions)
+                        (Component.get npcId world.npcMetas)
+            in
+            case maybeNpc of
+                Just { pos, npcAction, npcActionUntil, meta } ->
+                    let
+                        newAngle =
+                            angleFromPoints pos playerPos
+
+                        newNpcAction =
+                            NpcTalking newAngle ( npcAction, npcActionUntil )
+
+                        newWorld =
+                            applyNpcAction newNpcAction 0 npcId world
+
+                        dialog =
+                            createDialog
+                                { title = meta.name
+                                , texts = meta.dialog
+                                , talkingNpcId = npcId
+                                }
+                    in
+                    ( dialog, newWorld )
+
+                _ ->
+                    ( Nothing, world )
+
         Nothing ->
             ( Nothing, world )
-
-        Just playerPos ->
-            case findNpcToTalkWith playerPos world of
-                Just npcId ->
-                    let
-                        maybeNpc =
-                            Maybe.map3
-                                (\pos ( npcAction, npcActionUntil ) meta ->
-                                    { pos = pos
-                                    , npcAction = npcAction
-                                    , npcActionUntil = npcActionUntil
-                                    , meta = meta
-                                    }
-                                )
-                                (Component.get npcId world.positions)
-                                (Component.get npcId world.npcActions)
-                                (Component.get npcId world.npcMetas)
-                    in
-                    case maybeNpc of
-                        Just { pos, npcAction, npcActionUntil, meta } ->
-                            let
-                                newAngle =
-                                    angleFromPoints pos playerPos
-
-                                newNpcAction =
-                                    NpcTalking newAngle ( npcAction, npcActionUntil )
-
-                                newWorld =
-                                    applyNpcAction newNpcAction 0 npcId world
-
-                                dialog =
-                                    createDialog
-                                        { title = meta.name
-                                        , texts = meta.dialog
-                                        , talkingNpcId = npcId
-                                        }
-                            in
-                            ( dialog, newWorld )
-
-                        _ ->
-                            ( Nothing, world )
-
-                Nothing ->
-                    ( Nothing, world )
 
 
 applyNpcAction : NpcAction -> Float -> EntityID -> World -> World
