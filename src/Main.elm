@@ -424,6 +424,9 @@ smoothTurnSystem d w =
                     if deltaDegrees > 180 then
                         deltaDegrees - 360
 
+                    else if deltaDegrees < -180 then
+                        deltaDegrees + 360
+
                     else
                         deltaDegrees
 
@@ -433,6 +436,7 @@ smoothTurnSystem d w =
                 newAngle =
                     (degrees + (turnSpeed * normalizedDeltaDegrees))
                         |> Angle.degrees
+                        |> Angle.normalize
             in
             ( newAngle, targetAngle )
         )
