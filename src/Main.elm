@@ -74,7 +74,6 @@ type alias Model =
     , loadingErrors : List String
     , textures : Textures
     , floor : Maybe Shape
-    , nextNpcId : Int
     , dialog : Maybe Dialog
     , world : World
     }
@@ -136,7 +135,6 @@ init _ =
             , loadingErrors = []
             , textures = textures
             , floor = Nothing
-            , nextNpcId = 0
             , dialog = Nothing
             , world = initWorld
             }
@@ -462,12 +460,17 @@ gameTick d model =
 npcBehaviorCmd : World -> Cmd Msg
 npcBehaviorCmd w =
     System.indexedFoldl
-        (\npcId ( _, until ) acc ->
-            if until < w.time then
-                prepareNewNpcAction npcId :: acc
+        (\npcId ( action, until ) acc ->
+            case action of
+                NpcTalking _ _ ->
+                    acc
 
-            else
-                acc
+                _ ->
+                    if until < w.time then
+                        prepareNewNpcAction npcId :: acc
+
+                    else
+                        acc
         )
         w.npcActions
         []
