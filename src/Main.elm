@@ -548,22 +548,20 @@ findNewDialog world =
                 Just npcId ->
                     let
                         maybeNpc =
-                            Maybe.map4
-                                (\pos dialogTexts name ( npcAction, npcActionUntil ) ->
+                            Maybe.map3
+                                (\pos ( npcAction, npcActionUntil ) meta ->
                                     { pos = pos
-                                    , dialogTexts = dialogTexts
-                                    , name = name
                                     , npcAction = npcAction
                                     , npcActionUntil = npcActionUntil
+                                    , meta = meta
                                     }
                                 )
                                 (Component.get npcId world.positions)
-                                (Component.get npcId world.dialogs)
-                                (Component.get npcId world.names)
                                 (Component.get npcId world.npcActions)
+                                (Component.get npcId world.npcMetas)
                     in
                     case maybeNpc of
-                        Just { pos, dialogTexts, name, npcAction, npcActionUntil } ->
+                        Just { pos, npcAction, npcActionUntil, meta } ->
                             let
                                 newAngle =
                                     angleFromPoints pos playerPos
@@ -576,8 +574,8 @@ findNewDialog world =
 
                                 dialog =
                                     createDialog
-                                        { title = name
-                                        , texts = dialogTexts
+                                        { title = meta.name
+                                        , texts = meta.dialog
                                         , talkingNpcId = npcId
                                         }
                             in
@@ -1204,9 +1202,8 @@ type alias World =
     , shapes : Component.Set Shape
     , positions : Component.Set Position
     , angles : Component.Set ( Angle, Angle )
-    , names : Component.Set String
-    , dialogs : Component.Set (List String)
     , npcActions : Component.Set ( NpcAction, Float )
+    , npcMetas : Component.Set NpcMeta
     , playerId : EntityID
     }
 
@@ -1214,7 +1211,12 @@ type alias World =
 type alias NpcData =
     { color : Color
     , pos : Position
-    , name : String
+    , meta : NpcMeta
+    }
+
+
+type alias NpcMeta =
+    { name : String
     , dialog : List String
     }
 
@@ -1227,9 +1229,8 @@ initWorld =
             , shapes = Component.empty
             , positions = Component.empty
             , angles = Component.empty
-            , names = Component.empty
-            , dialogs = Component.empty
             , npcActions = Component.empty
+            , npcMetas = Component.empty
             , playerId = -1
             }
 
@@ -1237,18 +1238,22 @@ initWorld =
         npcData =
             [ { color = Color.purple
               , pos = Vector3d.meters 4 12 0
-              , name = "Viola"
-              , dialog =
-                    [ "Hey!"
-                    , "What's up?"
-                    ]
+              , meta =
+                    { name = "Viola"
+                    , dialog =
+                        [ "Hey!"
+                        , "What's up?"
+                        ]
+                    }
               }
             , { color = Color.darkRed
               , pos = Vector3d.meters 14 6 0
-              , name = "Redd"
-              , dialog =
-                    [ "Sup."
-                    ]
+              , meta =
+                    { name = "Redd"
+                    , dialog =
+                        [ "Sup."
+                        ]
+                    }
               }
             ]
 
@@ -1256,14 +1261,13 @@ initWorld =
             Angle.degrees 90
 
         npcEntity : NpcData -> ( EntityID, World ) -> ( EntityID, World )
-        npcEntity { color, pos, name, dialog } ( i, w ) =
+        npcEntity { color, pos, meta } ( i, w ) =
             Entity.create (i + 1) w
                 |> Entity.with ( shapeSpec, makeCube color )
                 |> Entity.with ( positionSpec, pos )
                 |> Entity.with ( angleSpec, ( initAngle, initAngle ) )
-                |> Entity.with ( nameSpec, name )
-                |> Entity.with ( dialogSpec, dialog )
                 |> Entity.with ( npcActionSpec, ( NpcWaiting, 0 ) )
+                |> Entity.with ( npcMetaSpec, meta )
 
         playerEntity : ( EntityID, World ) -> ( EntityID, World )
         playerEntity ( i, w ) =
@@ -1293,19 +1297,14 @@ angleSpec =
     Component.Spec .angles (\c w -> { w | angles = c })
 
 
-nameSpec : Component.Spec String { w | names : Component.Set String }
-nameSpec =
-    Component.Spec .names (\c w -> { w | names = c })
-
-
-dialogSpec : Component.Spec (List String) { w | dialogs : Component.Set (List String) }
-dialogSpec =
-    Component.Spec .dialogs (\c w -> { w | dialogs = c })
-
-
 npcActionSpec :
     Component.Spec
         ( NpcAction, Float )
         { w | npcActions : Component.Set ( NpcAction, Float ) }
 npcActionSpec =
     Component.Spec .npcActions (\c w -> { w | npcActions = c })
+
+
+npcMetaSpec : Component.Spec NpcMeta { w | npcMetas : Component.Set NpcMeta }
+npcMetaSpec =
+    Component.Spec .npcMetas (\c w -> { w | npcMetas = c })
