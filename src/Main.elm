@@ -57,16 +57,12 @@ type alias Texture =
     Material.Texture Color
 
 
-type SceneCoordinates
-    = SceneCoordinates
-
-
 type alias Position =
-    Vector3d Length.Meters SceneCoordinates
+    Vector3d Length.Meters ()
 
 
 type alias Shape =
-    Scene3d.Entity SceneCoordinates
+    Scene3d.Entity ()
 
 
 type alias Model =
