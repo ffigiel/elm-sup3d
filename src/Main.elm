@@ -665,21 +665,19 @@ findNewDialog world =
                 )
     of
         Just ( playerPos, npcId ) ->
-            let
-                maybeNpc =
-                    Maybe.map3
-                        (\pos ( npcAction, npcActionUntil ) meta ->
-                            { pos = pos
-                            , npcAction = npcAction
-                            , npcActionUntil = npcActionUntil
-                            , meta = meta
-                            }
-                        )
-                        (Component.get npcId world.positions)
-                        (Component.get npcId world.npcActions)
-                        (Component.get npcId world.npcMetas)
-            in
-            case maybeNpc of
+            case
+                Maybe.map3
+                    (\pos ( npcAction, npcActionUntil ) meta ->
+                        { pos = pos
+                        , npcAction = npcAction
+                        , npcActionUntil = npcActionUntil
+                        , meta = meta
+                        }
+                    )
+                    (Component.get npcId world.positions)
+                    (Component.get npcId world.npcActions)
+                    (Component.get npcId world.npcMetas)
+            of
                 Just { pos, npcAction, npcActionUntil, meta } ->
                     let
                         newAngle =
@@ -700,7 +698,7 @@ findNewDialog world =
                     in
                     ( dialog, newWorld )
 
-                _ ->
+                Nothing ->
                     ( Nothing, world )
 
         Nothing ->
