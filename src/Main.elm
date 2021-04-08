@@ -544,29 +544,32 @@ findNewDialog world =
             case findNpcToTalkWith playerPos world of
                 Just npcId ->
                     let
-                        mPos =
-                            Component.get npcId world.positions
-
-                        mDialogs =
-                            Component.get npcId world.dialogs
-
-                        mName =
-                            Component.get npcId world.names
+                        maybeNpc =
+                            Maybe.map4
+                                (\pos dialogTexts name ( npcAction, npcActionUntil ) ->
+                                    { pos = pos
+                                    , dialogTexts = dialogTexts
+                                    , name = name
+                                    , npcAction = npcAction
+                                    , npcActionUntil = npcActionUntil
+                                    }
+                                )
+                                (Component.get npcId world.positions)
+                                (Component.get npcId world.dialogs)
+                                (Component.get npcId world.names)
+                                (Component.get npcId world.npcActions)
                     in
-                    case ( mPos, mDialogs, mName ) of
-                        ( Just pos, Just dialogTexts, Just name ) ->
+                    case maybeNpc of
+                        Just { pos, dialogTexts, name, npcAction, npcActionUntil } ->
                             let
                                 newAngle =
                                     angleFromPoints pos playerPos
 
-                                newActions =
-                                    Component.update npcId
-                                        (\( action, until ) ->
-                                            ( NpcTalking newAngle ( action, until )
-                                            , 0
-                                            )
-                                        )
-                                        world.npcActions
+                                newNpcAction =
+                                    NpcTalking newAngle ( npcAction, npcActionUntil )
+
+                                newWorld =
+                                    applyNpcAction newNpcAction 0 npcId world
 
                                 dialog =
                                     createDialog
@@ -574,9 +577,6 @@ findNewDialog world =
                                         , texts = dialogTexts
                                         , talkingNpcId = npcId
                                         }
-
-                                newWorld =
-                                    { world | npcActions = newActions }
                             in
                             ( dialog, newWorld )
 
