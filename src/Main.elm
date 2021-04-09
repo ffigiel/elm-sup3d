@@ -8,6 +8,7 @@ import Browser.Events
 import Camera3d
 import Color exposing (Color)
 import Direction3d
+import Duration
 import Html exposing (Html)
 import Html.Attributes as HA
 import Illuminance
@@ -98,6 +99,8 @@ type alias World =
     { time : Float -- in seconds
     , shapes : Component.Set Shape
     , positions : Component.Set Position
+    , velocities : Component.Set Position
+    , accelerations : Component.Set Position
     , angles : Component.Set ( Angle, Angle )
     , npcActions : Component.Set ( NpcAction, Float )
     , npcMetas : Component.Set NpcMeta
@@ -203,6 +206,8 @@ initWorld =
             { time = 0
             , shapes = Component.empty
             , positions = Component.empty
+            , velocities = Component.empty
+            , accelerations = Component.empty
             , angles = Component.empty
             , npcActions = Component.empty
             , npcMetas = Component.empty
@@ -240,6 +245,8 @@ initWorld =
             Entity.create (i + 1) w
                 |> Entity.with ( shapeSpec, makeCube color )
                 |> Entity.with ( positionSpec, pos )
+                |> Entity.with ( velocitySpec, zeroVector )
+                |> Entity.with ( accelerationSpec, zeroVector )
                 |> Entity.with ( angleSpec, ( initAngle, initAngle ) )
                 |> Entity.with ( npcActionSpec, ( NpcWaiting, 0 ) )
                 |> Entity.with ( npcMetaSpec, meta )
@@ -249,12 +256,19 @@ initWorld =
             Entity.create (i + 1) { w | playerId = i + 1 }
                 |> Entity.with ( shapeSpec, makeCube Color.lightBlue )
                 |> Entity.with ( positionSpec, Vector3d.meters 8 8 0 )
+                |> Entity.with ( velocitySpec, zeroVector )
+                |> Entity.with ( accelerationSpec, zeroVector )
                 |> Entity.with ( angleSpec, ( initAngle, initAngle ) )
     in
     ( 0, world )
         |> (\a -> List.foldl npcEntity a npcData)
         |> playerEntity
         |> Tuple.second
+
+
+zeroVector : Position
+zeroVector =
+    Vector3d.meters 0 0 0
 
 
 getViewport : Cmd Msg
@@ -416,6 +430,16 @@ positionSpec =
     Component.Spec .positions (\c w -> { w | positions = c })
 
 
+velocitySpec : Component.Spec Position { w | velocities : Component.Set Position }
+velocitySpec =
+    Component.Spec .velocities (\c w -> { w | velocities = c })
+
+
+accelerationSpec : Component.Spec Position { w | accelerations : Component.Set Position }
+accelerationSpec =
+    Component.Spec .accelerations (\c w -> { w | accelerations = c })
+
+
 angleSpec : Component.Spec ( Angle, Angle ) { w | angles : Component.Set ( Angle, Angle ) }
 angleSpec =
     Component.Spec .angles (\c w -> { w | angles = c })
@@ -450,8 +474,9 @@ gameTick d model =
         newWorld =
             model.world
                 |> timeSystem d
-                |> System.applyIf (newDialog == Nothing) (playerMovementSystem d model.pressedKeys)
-                |> npcActionSystem d
+                |> System.applyIf (newDialog == Nothing) (playerMovementSystem model.pressedKeys)
+                |> accelerationSystem d
+                |> velocitySystem d
                 |> smoothTurnSystem d
 
         newModel =
@@ -472,14 +497,11 @@ timeSystem d w =
     { w | time = w.time + d }
 
 
-playerMovementSystem : Float -> List Keyboard.Key -> World -> World
-playerMovementSystem d pressedKeys w =
+playerMovementSystem : List Keyboard.Key -> World -> World
+playerMovementSystem pressedKeys w =
     let
         arrows =
             Keyboard.Arrows.arrows pressedKeys
-
-        zeroVector =
-            Vector3d.meters 0 0 0
 
         targetVector =
             Vector3d.meters
@@ -490,6 +512,7 @@ playerMovementSystem d pressedKeys w =
     if targetVector == zeroVector then
         { w
             | angles = Component.update w.playerId (\( a, _ ) -> ( a, a )) w.angles
+            , accelerations = Component.set w.playerId zeroVector w.accelerations
         }
 
     else
@@ -497,62 +520,59 @@ playerMovementSystem d pressedKeys w =
             |> Maybe.map
                 (\( angle, _ ) ->
                     let
-                        playerSpeed =
-                            2
+                        playerAccel =
+                            Length.meters 16
 
                         newTargetAngle =
                             angleFromPoints zeroVector targetVector
 
-                        dPos =
-                            Vector3d.rThetaOn
-                                SketchPlane3d.xy
-                                (Length.meters <| d * playerSpeed)
-                                angle
+                        newAcceleration =
+                            Vector3d.rThetaOn SketchPlane3d.xy playerAccel newTargetAngle
 
-                        newPositions =
-                            Component.update w.playerId (Vector3d.plus dPos) w.positions
+                        newAccelerations =
+                            w.accelerations
+                                |> Component.set w.playerId newAcceleration
 
                         newAngles =
-                            Component.update w.playerId (\( a, _ ) -> ( a, newTargetAngle )) w.angles
+                            w.angles
+                                |> Component.update w.playerId (\( a, _ ) -> ( a, newTargetAngle ))
                     in
                     { w
-                        | positions = newPositions
+                        | accelerations = newAccelerations
                         , angles = newAngles
                     }
                 )
             |> Maybe.withDefault w
 
 
-npcActionSystem : Float -> World -> World
-npcActionSystem d w =
-    System.step3
-        (\( ( action, _ ), _ ) ( pos, setPos ) ( ( angle, _ ), _ ) acc ->
-            case action of
-                NpcPacing _ ->
-                    let
-                        npcSpeed =
-                            0.5
-
-                        dPos =
-                            Vector3d.rThetaOn
-                                SketchPlane3d.xy
-                                (Length.meters <| d * npcSpeed)
-                                angle
-
-                        newPos =
-                            Vector3d.plus
-                                pos
-                                dPos
-                    in
-                    acc
-                        |> setPos newPos
-
-                _ ->
-                    acc
+accelerationSystem : Float -> World -> World
+accelerationSystem d w =
+    System.step2
+        (\( accel, _ ) ( vel, setVel ) acc ->
+            accel
+                |> Vector3d.per (Duration.seconds 1)
+                |> Vector3d.for (Duration.seconds d)
+                |> Vector3d.plus vel
+                |> Vector3d.scaleBy (max 0 (1 - (6 * d)))
+                |> (\v -> setVel v acc)
         )
-        npcActionSpec
+        accelerationSpec
+        velocitySpec
+        w
+
+
+velocitySystem : Float -> World -> World
+velocitySystem d w =
+    System.step2
+        (\( vel, _ ) ( pos, setPos ) acc ->
+            vel
+                |> Vector3d.per (Duration.seconds 1)
+                |> Vector3d.for (Duration.seconds d)
+                |> Vector3d.plus pos
+                |> (\p -> setPos p acc)
+        )
+        velocitySpec
         positionSpec
-        angleSpec
         w
 
 
@@ -747,33 +767,50 @@ startNpcDialog playerPos world npc =
 
 applyNpcAction : NpcAction -> Float -> EntityID -> World -> World
 applyNpcAction action until npcId w =
-    case Component.get npcId w.angles of
-        Nothing ->
-            w
+    Maybe.map2
+        Tuple.pair
+        (Component.get npcId w.angles)
+        (Component.get npcId w.accelerations)
+        |> Maybe.map
+            (\( ( angle, targetAngle ), acceleration ) ->
+                let
+                    ( newTargetAngle, newAcceleration ) =
+                        case action of
+                            NpcPacing d ->
+                                let
+                                    npcAccel =
+                                        Length.meters 4
 
-        Just ( angle, targetAngle ) ->
-            let
-                newTargetAngle =
-                    case action of
-                        NpcPacing d ->
-                            addAngles angle d
+                                    ta =
+                                        addAngles angle d
 
-                        NpcTalking a _ ->
-                            a
+                                    accel =
+                                        Vector3d.rThetaOn SketchPlane3d.xy npcAccel ta
+                                in
+                                ( ta, accel )
 
-                        _ ->
-                            targetAngle
+                            NpcTalking a _ ->
+                                ( a, zeroVector )
 
-                newAngles =
-                    Component.set npcId ( angle, newTargetAngle ) w.angles
+                            _ ->
+                                ( targetAngle, zeroVector )
 
-                newNpcActions =
-                    Component.set npcId ( action, until ) w.npcActions
-            in
-            { w
-                | angles = newAngles
-                , npcActions = newNpcActions
-            }
+                    newAngles =
+                        Component.set npcId ( angle, newTargetAngle ) w.angles
+
+                    newNpcActions =
+                        Component.set npcId ( action, until ) w.npcActions
+
+                    newAccelerations =
+                        Component.set npcId newAcceleration w.accelerations
+                in
+                { w
+                    | angles = newAngles
+                    , npcActions = newNpcActions
+                    , accelerations = newAccelerations
+                }
+            )
+        |> Maybe.withDefault w
 
 
 addAngles : Angle -> Angle -> Angle
