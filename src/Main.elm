@@ -66,7 +66,7 @@ type alias Shape =
 
 
 type alias Model =
-    { deltas : List Float
+    { fpsCounter : FpsCounter
     , width : Int
     , height : Int
     , pressedKeys : List Keyboard.Key
@@ -76,6 +76,12 @@ type alias Model =
     , floor : Maybe Shape
     , dialog : Maybe Dialog
     , world : World
+    }
+
+
+type alias FpsCounter =
+    { fps : Float
+    , deltas : List Float
     }
 
 
@@ -151,7 +157,7 @@ init _ =
     let
         model : Model
         model =
-            { deltas = []
+            { fpsCounter = fpsCounter
             , width = 0
             , height = 0
             , pressedKeys = []
@@ -161,6 +167,11 @@ init _ =
             , floor = Nothing
             , dialog = Nothing
             , world = initWorld
+            }
+
+        fpsCounter =
+            { fps = 0
+            , deltas = []
             }
 
         textures =
@@ -364,25 +375,22 @@ update msg model =
             ( { model | world = newWorld }, Cmd.none )
 
 
-updateDeltas : Float -> Model -> Model
-updateDeltas delta model =
-    let
-        oldDeltas =
-            case model.deltas of
-                [] ->
-                    []
+fpsCounterTick : Float -> FpsCounter -> FpsCounter
+fpsCounterTick delta counter =
+    if List.length counter.deltas < 60 then
+        { fps = counter.fps
+        , deltas = delta :: counter.deltas
+        }
 
-                _ :: rest ->
-                    if List.length model.deltas > 120 then
-                        rest
+    else
+        { fps = calculateFps counter.deltas
+        , deltas = [ delta ]
+        }
 
-                    else
-                        model.deltas
 
-        newDeltas =
-            oldDeltas ++ [ delta ]
-    in
-    { model | deltas = newDeltas }
+calculateFps : List Float -> Float
+calculateFps deltas =
+    1 / (List.sum deltas / (List.length deltas |> toFloat))
 
 
 updateFloor : Model -> Model
@@ -562,15 +570,19 @@ gameTick d model =
         newDialog =
             Maybe.map (\dialog -> { dialog | duration = dialog.duration + d }) model.dialog
 
+        newFpsCounter =
+            fpsCounterTick d model.fpsCounter
+
         newModel =
             { model
-                | dialog = newDialog
+                | fpsCounter = newFpsCounter
+                , dialog = newDialog
             }
 
         cmd =
             npcBehaviorCmd model.world
     in
-    ( newModel |> updateDeltas d, cmd )
+    ( newModel, cmd )
 
 
 npcBehaviorCmd : World -> Cmd Msg
@@ -1136,7 +1148,7 @@ gameView model floor =
     in
     -- Render a scene with custom lighting and other settings
     Html.div []
-        [ fpsView model.deltas
+        [ fpsView model.fpsCounter
         , dialogView model.dialog
         , Scene3d.custom
             { entities = floor :: shapes
@@ -1153,14 +1165,14 @@ gameView model floor =
         ]
 
 
-fpsView : List Float -> Html msg
-fpsView deltas =
+fpsView : FpsCounter -> Html msg
+fpsView counter =
     Html.p
         [ HA.style "position" "absolute"
         , HA.style "text-shadow" "0 0 1px black"
         , HA.style "font-size" "2vmin"
         ]
-        [ fpsFromDeltas deltas
+        [ counter.fps
             |> round
             |> String.fromInt
             |> Html.text
@@ -1226,16 +1238,6 @@ dialogTextView dialog =
 dialogCharactersPerSecond : Float
 dialogCharactersPerSecond =
     40
-
-
-fpsFromDeltas : List Float -> Float
-fpsFromDeltas deltas =
-    case deltas of
-        [] ->
-            0
-
-        _ ->
-            1 / (List.sum deltas / (List.length deltas |> toFloat))
 
 
 getLights : Float -> Scene3d.Lights coordinates
