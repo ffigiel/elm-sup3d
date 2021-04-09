@@ -635,7 +635,7 @@ genNpcWaiting =
 genNpcPacing : Random.Generator ( NpcAction, Float )
 genNpcPacing =
     Random.map2 (\angle duration -> ( NpcPacing angle, duration ))
-        (Random.float -60 60 |> Random.map Angle.degrees)
+        (Random.float -90 90 |> Random.map Angle.degrees)
         (Random.float 1 3)
 
 
