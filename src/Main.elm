@@ -121,7 +121,7 @@ type alias NpcMeta =
 type NpcAction
     = NpcWaiting
     | NpcPacing Angle
-    | NpcTalking Angle ( NpcAction, Float )
+    | NpcTalking Angle NpcAction
 
 
 type alias Textures =
@@ -708,7 +708,7 @@ startNpcDialog playerPos world npc =
             angleFromPoints npc.pos playerPos
 
         newNpcAction =
-            NpcTalking newAngle ( npc.action, npc.actionUntil )
+            NpcTalking newAngle npc.action
 
         newWorld =
             applyNpcAction newNpcAction 0 npc.id world
@@ -788,12 +788,9 @@ advanceDialog dialog world =
 
 stopNpcTalking : EntityID -> World -> World
 stopNpcTalking npcId world =
-    case Component.get npcId world.npcActions of
-        Just ( NpcTalking _ ( prevAction, prevUntil ), _ ) ->
-            applyNpcAction prevAction prevUntil npcId world
-
-        _ ->
-            world
+    { world
+        | npcActions = Component.set npcId ( NpcWaiting, world.time + 1 ) world.npcActions
+    }
 
 
 minDurationToAdvanceDialogText : String -> Float
