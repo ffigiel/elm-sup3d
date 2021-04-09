@@ -488,32 +488,39 @@ playerMovementSystem d pressedKeys w =
                 0
     in
     if targetVector == zeroVector then
-        w
+        { w
+            | angles = Component.update w.playerId (\( a, _ ) -> ( a, a )) w.angles
+        }
 
     else
-        let
-            playerSpeed =
-                2
+        Component.get w.playerId w.angles
+            |> Maybe.map
+                (\( angle, _ ) ->
+                    let
+                        playerSpeed =
+                            2
 
-            newTargetAngle =
-                angleFromPoints zeroVector targetVector
+                        newTargetAngle =
+                            angleFromPoints zeroVector targetVector
 
-            dPos =
-                Vector3d.rThetaOn
-                    SketchPlane3d.xy
-                    (Length.meters <| d * playerSpeed)
-                    newTargetAngle
+                        dPos =
+                            Vector3d.rThetaOn
+                                SketchPlane3d.xy
+                                (Length.meters <| d * playerSpeed)
+                                angle
 
-            newPositions =
-                Component.update w.playerId (Vector3d.plus dPos) w.positions
+                        newPositions =
+                            Component.update w.playerId (Vector3d.plus dPos) w.positions
 
-            newAngles =
-                Component.update w.playerId (\( a, _ ) -> ( a, newTargetAngle )) w.angles
-        in
-        { w
-            | positions = newPositions
-            , angles = newAngles
-        }
+                        newAngles =
+                            Component.update w.playerId (\( a, _ ) -> ( a, newTargetAngle )) w.angles
+                    in
+                    { w
+                        | positions = newPositions
+                        , angles = newAngles
+                    }
+                )
+            |> Maybe.withDefault w
 
 
 npcActionSystem : Float -> World -> World
@@ -583,7 +590,7 @@ updateTargetAngle d ( angle, targetAngle ) =
             abs normalizedDeltaDegrees / normalizedDeltaDegrees
 
         turnSpeed =
-            90 * d
+            180 * d
 
         turnDelta =
             if turnSpeed > abs normalizedDeltaDegrees then
