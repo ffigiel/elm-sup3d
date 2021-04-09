@@ -475,36 +475,45 @@ timeSystem d w =
 playerMovementSystem : Float -> List Keyboard.Key -> World -> World
 playerMovementSystem d pressedKeys w =
     let
-        playerSpeed =
-            1.5
-
         arrows =
             Keyboard.Arrows.arrows pressedKeys
 
         zeroVector =
             Vector3d.meters 0 0 0
 
-        dPos =
+        targetVector =
             Vector3d.meters
-                (toFloat arrows.x * d * playerSpeed)
-                (toFloat arrows.y * d * playerSpeed)
+                (toFloat arrows.x)
+                (toFloat arrows.y)
                 0
     in
-    if dPos == zeroVector then
+    if targetVector == zeroVector then
         w
 
     else
         let
-            newPositions =
-                Component.update w.playerId (Vector3d.plus dPos) w.positions
+            playerSpeed =
+                2
 
             newTargetAngle =
-                angleFromPoints zeroVector dPos
+                angleFromPoints zeroVector targetVector
+
+            dPos =
+                Vector3d.rThetaOn
+                    SketchPlane3d.xy
+                    (Length.meters <| d * playerSpeed)
+                    newTargetAngle
+
+            newPositions =
+                Component.update w.playerId (Vector3d.plus dPos) w.positions
 
             newAngles =
                 Component.update w.playerId (\( a, _ ) -> ( a, newTargetAngle )) w.angles
         in
-        { w | positions = newPositions, angles = newAngles }
+        { w
+            | positions = newPositions
+            , angles = newAngles
+        }
 
 
 npcActionSystem : Float -> World -> World
