@@ -733,8 +733,8 @@ applyNpcAction action until npcId w =
             let
                 newTargetAngle =
                     case action of
-                        NpcPacing a ->
-                            a
+                        NpcPacing d ->
+                            addAngles angle d
 
                         NpcTalking a _ ->
                             a
@@ -752,6 +752,14 @@ applyNpcAction action until npcId w =
                 | angles = newAngles
                 , npcActions = newNpcActions
             }
+
+
+addAngles : Angle -> Angle -> Angle
+addAngles a b =
+    Angle.inDegrees a
+        + Angle.inDegrees b
+        |> Angle.degrees
+        |> Angle.normalize
 
 
 angleFromPoints : Position -> Position -> Angle
