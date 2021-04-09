@@ -7,7 +7,6 @@ import Browser.Dom
 import Browser.Events
 import Camera3d
 import Color exposing (Color)
-import Dict exposing (Dict)
 import Direction3d
 import Html exposing (Html)
 import Html.Attributes as HA
@@ -16,6 +15,9 @@ import Keyboard
 import Keyboard.Arrows
 import Length
 import List.Extra as List
+import Logic.Component as Component
+import Logic.Entity as Entity exposing (EntityID)
+import Logic.System as System
 import LuminousFlux
 import Pixels
 import Point3d
@@ -55,28 +57,25 @@ type alias Texture =
     Material.Texture Color
 
 
-type WorldCoordinates
-    = WorldCoordinates
+type alias Position =
+    Vector3d Length.Meters ()
 
 
-type alias Entity =
-    Scene3d.Entity WorldCoordinates
+type alias Shape =
+    Scene3d.Entity ()
 
 
 type alias Model =
-    { time : Float -- in seconds
-    , deltas : List Float
+    { deltas : List Float
     , width : Int
     , height : Int
     , pressedKeys : List Keyboard.Key
     , keyChange : Maybe Keyboard.KeyChange
-    , player : Player
     , loadingErrors : List String
     , textures : Textures
-    , floor : Maybe Entity
-    , nextNpcId : Int
-    , npcs : Dict Int Npc
+    , floor : Maybe Shape
     , dialog : Maybe Dialog
+    , world : World
     }
 
 
@@ -85,28 +84,31 @@ type alias Dialog =
     , text : String
     , duration : Float
     , queue : List String
-    , talkingNpcId : Int
+    , talkingNpcId : EntityID
     }
 
 
-type alias Player =
-    { entity : Entity
-    , pos : Vector3d Length.Meters WorldCoordinates
-    , angle : Angle
-    , targetAngle : Angle
+type alias World =
+    { time : Float -- in seconds
+    , shapes : Component.Set Shape
+    , positions : Component.Set Position
+    , angles : Component.Set ( Angle, Angle )
+    , npcActions : Component.Set ( NpcAction, Float )
+    , npcMetas : Component.Set NpcMeta
+    , playerId : EntityID
     }
 
 
-type alias Npc =
-    { id : Int
-    , name : String
-    , entity : Entity
-    , pos : Vector3d Length.Meters WorldCoordinates
-    , angle : Angle
-    , targetAngle : Angle
+type alias NpcData =
+    { color : Color
+    , pos : Position
+    , meta : NpcMeta
+    }
+
+
+type alias NpcMeta =
+    { name : String
     , dialog : List String
-    , action : NpcAction
-    , actionTimeLeft : Float
     }
 
 
@@ -149,50 +151,21 @@ init _ =
     let
         model : Model
         model =
-            { time = 0
-            , deltas = []
+            { deltas = []
             , width = 0
             , height = 0
             , pressedKeys = []
             , keyChange = Nothing
-            , player = player
             , loadingErrors = []
             , textures = textures
             , floor = Nothing
-            , nextNpcId = 0
-            , npcs = Dict.empty
             , dialog = Nothing
-            }
-
-        player =
-            { entity = makeCube Color.lightBlue
-            , angle = Angle.degrees 0
-            , targetAngle = Angle.degrees 0
-            , pos = Vector3d.meters 8 8 0
+            , world = initWorld
             }
 
         textures =
             { grass = Nothing
             , water = Nothing
-            }
-
-        npc1 =
-            { name = "Viola"
-            , color = Color.purple
-            , pos = Vector3d.meters 4 12 0
-            , dialog =
-                [ "Hey!"
-                , "What's up?"
-                ]
-            }
-
-        npc2 =
-            { name = "Redd"
-            , color = Color.darkRed
-            , pos = Vector3d.meters 14 6 0
-            , dialog =
-                [ "Sup."
-                ]
             }
 
         textureCmds =
@@ -209,39 +182,68 @@ init _ =
             Cmd.batch
                 (getViewport :: textureCmds)
     in
-    ( model
-        |> addNpc npc1
-        |> addNpc npc2
-    , cmd
-    )
+    ( model, cmd )
 
 
-addNpc :
-    { name : String
-    , color : Color
-    , pos : Vector3d Length.Meters WorldCoordinates
-    , dialog : List String
-    }
-    -> Model
-    -> Model
-addNpc { name, color, pos, dialog } model =
+initWorld : World
+initWorld =
     let
-        npc =
-            { id = model.nextNpcId
-            , name = name
-            , entity = makeCube color
-            , pos = pos
-            , dialog = dialog
-            , angle = Angle.degrees 90
-            , targetAngle = Angle.degrees 90
-            , action = NpcWaiting
-            , actionTimeLeft = 0
+        world =
+            { time = 0
+            , shapes = Component.empty
+            , positions = Component.empty
+            , angles = Component.empty
+            , npcActions = Component.empty
+            , npcMetas = Component.empty
+            , playerId = -1
             }
+
+        npcData : List NpcData
+        npcData =
+            [ { color = Color.purple
+              , pos = Vector3d.meters 4 12 0
+              , meta =
+                    { name = "Viola"
+                    , dialog =
+                        [ "Hey!"
+                        , "What's up?"
+                        ]
+                    }
+              }
+            , { color = Color.darkRed
+              , pos = Vector3d.meters 14 6 0
+              , meta =
+                    { name = "Redd"
+                    , dialog =
+                        [ "Sup."
+                        ]
+                    }
+              }
+            ]
+
+        initAngle =
+            Angle.degrees 90
+
+        npcEntity : NpcData -> ( EntityID, World ) -> ( EntityID, World )
+        npcEntity { color, pos, meta } ( i, w ) =
+            Entity.create (i + 1) w
+                |> Entity.with ( shapeSpec, makeCube color )
+                |> Entity.with ( positionSpec, pos )
+                |> Entity.with ( angleSpec, ( initAngle, initAngle ) )
+                |> Entity.with ( npcActionSpec, ( NpcWaiting, 0 ) )
+                |> Entity.with ( npcMetaSpec, meta )
+
+        playerEntity : ( EntityID, World ) -> ( EntityID, World )
+        playerEntity ( i, w ) =
+            Entity.create (i + 1) { w | playerId = i + 1 }
+                |> Entity.with ( shapeSpec, makeCube Color.lightBlue )
+                |> Entity.with ( positionSpec, Vector3d.meters 8 8 0 )
+                |> Entity.with ( angleSpec, ( initAngle, initAngle ) )
     in
-    { model
-        | nextNpcId = model.nextNpcId + 1
-        , npcs = Dict.insert npc.id npc model.npcs
-    }
+    ( 0, world )
+        |> (\a -> List.foldl npcEntity a npcData)
+        |> playerEntity
+        |> Tuple.second
 
 
 getViewport : Cmd Msg
@@ -282,7 +284,8 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Tick d ->
-            { model | time = model.time + d }
+            model
+                |> ecsTick d
                 |> gameTick d
 
         Resized ->
@@ -350,15 +353,15 @@ update msg model =
                     in
                     ( { model | loadingErrors = model.loadingErrors ++ [ newError ] }, Cmd.none )
 
-        GotNpcAction npcId ( action, actionTimeLeft ) ->
+        GotNpcAction npcId ( action, duration ) ->
             let
-                newNpcs =
-                    Dict.update
-                        npcId
-                        (Maybe.map <| applyNpcAction action actionTimeLeft)
-                        model.npcs
+                world =
+                    model.world
+
+                newWorld =
+                    applyNpcAction action (world.time + duration) npcId model.world
             in
-            ( { model | npcs = newNpcs }, Cmd.none )
+            ( { model | world = newWorld }, Cmd.none )
 
 
 updateDeltas : Float -> Model -> Model
@@ -394,190 +397,227 @@ updateFloor model =
 
 
 
+-- ECS
+
+
+shapeSpec : Component.Spec Shape { w | shapes : Component.Set Shape }
+shapeSpec =
+    Component.Spec .shapes (\c w -> { w | shapes = c })
+
+
+positionSpec : Component.Spec Position { w | positions : Component.Set Position }
+positionSpec =
+    Component.Spec .positions (\c w -> { w | positions = c })
+
+
+angleSpec : Component.Spec ( Angle, Angle ) { w | angles : Component.Set ( Angle, Angle ) }
+angleSpec =
+    Component.Spec .angles (\c w -> { w | angles = c })
+
+
+npcActionSpec :
+    Component.Spec
+        ( NpcAction, Float )
+        { w | npcActions : Component.Set ( NpcAction, Float ) }
+npcActionSpec =
+    Component.Spec .npcActions (\c w -> { w | npcActions = c })
+
+
+npcMetaSpec : Component.Spec NpcMeta { w | npcMetas : Component.Set NpcMeta }
+npcMetaSpec =
+    Component.Spec .npcMetas (\c w -> { w | npcMetas = c })
+
+
+
 -- TICK
 
 
-gameTick : Float -> Model -> ( Model, Cmd Msg )
-gameTick d model =
+ecsTick : Float -> Model -> Model
+ecsTick d model =
+    let
+        newWorld =
+            model.world
+                |> timeSystem d
+                |> System.applyIf (model.dialog == Nothing) (playerMovementSystem d model.pressedKeys)
+                |> npcActionSystem d
+                |> smoothTurnSystem d
+    in
+    { model | world = newWorld }
+
+
+timeSystem : Float -> World -> World
+timeSystem d w =
+    { w | time = w.time + d }
+
+
+playerMovementSystem : Float -> List Keyboard.Key -> World -> World
+playerMovementSystem d pressedKeys w =
     let
         playerSpeed =
             1.5
 
         arrows =
-            Keyboard.Arrows.arrows model.pressedKeys
+            Keyboard.Arrows.arrows pressedKeys
 
-        player =
-            model.player
+        zeroVector =
+            Vector3d.meters 0 0 0
 
-        newPlayerPos =
-            case model.dialog of
-                Nothing ->
-                    Vector3d.plus player.pos <|
-                        Vector3d.meters
-                            (toFloat arrows.x * d * playerSpeed)
-                            (toFloat arrows.y * d * playerSpeed)
-                            0
+        dPos =
+            Vector3d.meters
+                (toFloat arrows.x * d * playerSpeed)
+                (toFloat arrows.y * d * playerSpeed)
+                0
+    in
+    if dPos == zeroVector then
+        w
+
+    else
+        let
+            newPositions =
+                Component.update w.playerId (Vector3d.plus dPos) w.positions
+
+            newTargetAngle =
+                angleFromPoints zeroVector dPos
+
+            newAngles =
+                Component.update w.playerId (\( a, _ ) -> ( a, newTargetAngle )) w.angles
+        in
+        { w | positions = newPositions, angles = newAngles }
+
+
+npcActionSystem : Float -> World -> World
+npcActionSystem d w =
+    System.step3
+        (\( ( action, _ ), _ ) ( pos, setPos ) ( ( angle, _ ), _ ) acc ->
+            case action of
+                NpcPacing _ ->
+                    let
+                        npcSpeed =
+                            0.5
+
+                        dPos =
+                            Vector3d.rThetaOn
+                                SketchPlane3d.xy
+                                (Length.meters <| d * npcSpeed)
+                                angle
+
+                        newPos =
+                            Vector3d.plus
+                                pos
+                                dPos
+                    in
+                    acc
+                        |> setPos newPos
 
                 _ ->
-                    player.pos
+                    acc
+        )
+        npcActionSpec
+        positionSpec
+        angleSpec
+        w
 
-        newPlayerTargetAngle =
-            if model.player.pos == newPlayerPos then
-                model.player.targetAngle
 
-            else
-                angleFromPoints model.player.pos newPlayerPos
+smoothTurnSystem : Float -> World -> World
+smoothTurnSystem d w =
+    System.step
+        (\( angle, targetAngle ) ->
+            let
+                degrees =
+                    Angle.inDegrees angle
 
-        newPlayer =
-            { player
-                | pos = newPlayerPos
-                , angle = angleTick d ( model.player.angle, newPlayerTargetAngle )
-                , targetAngle = newPlayerTargetAngle
-            }
+                targetDegrees =
+                    Angle.inDegrees targetAngle
 
-        ( newNpcs, npcCmds ) =
-            npcsTick d model.npcs
+                deltaDegrees =
+                    targetDegrees - degrees
 
+                normalizedDeltaDegrees =
+                    if deltaDegrees > 180 then
+                        deltaDegrees - 360
+
+                    else if deltaDegrees < -180 then
+                        deltaDegrees + 360
+
+                    else
+                        deltaDegrees
+
+                turnSpeed =
+                    min 1 (d * 3)
+
+                newAngle =
+                    (degrees + (turnSpeed * normalizedDeltaDegrees))
+                        |> Angle.degrees
+                        |> Angle.normalize
+            in
+            ( newAngle, targetAngle )
+        )
+        angleSpec
+        w
+
+
+gameTick : Float -> Model -> ( Model, Cmd Msg )
+gameTick d model =
+    let
         newDialog =
             Maybe.map (\dialog -> { dialog | duration = dialog.duration + d }) model.dialog
 
         newModel =
             { model
-                | player = newPlayer
-                , npcs = newNpcs
-                , dialog = newDialog
+                | dialog = newDialog
             }
 
         cmd =
-            Cmd.batch npcCmds
+            npcBehaviorCmd model.world
     in
     ( newModel |> updateDeltas d, cmd )
 
 
-npcsTick : Float -> Dict Int Npc -> ( Dict Int Npc, List (Cmd Msg) )
-npcsTick d npcs =
-    let
-        ( npcValues, cmds ) =
-            Dict.values npcs
-                |> List.map (npcTick d)
-                |> List.unzip
+npcBehaviorCmd : World -> Cmd Msg
+npcBehaviorCmd w =
+    System.indexedFoldl
+        (\npcId ( action, until ) acc ->
+            case action of
+                NpcTalking _ _ ->
+                    acc
 
-        newNpcs =
-            npcValues
-                |> List.map (\n -> ( n.id, n ))
-                |> Dict.fromList
-    in
-    ( newNpcs, cmds )
+                _ ->
+                    if until < w.time then
+                        prepareNewNpcAction npcId :: acc
 
-
-npcTick : Float -> Npc -> ( Npc, Cmd Msg )
-npcTick d npc =
-    let
-        newNpc =
-            { npc
-                | angle = angleTick d ( npc.angle, npc.targetAngle )
-            }
-    in
-    case newNpc.action of
-        NpcTalking _ _ ->
-            ( newNpc, Cmd.none )
-
-        _ ->
-            npcTickAction d { newNpc | actionTimeLeft = newNpc.actionTimeLeft - d }
+                    else
+                        acc
+        )
+        w.npcActions
+        []
+        |> Cmd.batch
 
 
-angleTick : Float -> ( Angle, Angle ) -> Angle
-angleTick d ( angle, targetAngle ) =
-    let
-        degrees =
-            Angle.inDegrees angle
-
-        targetDegrees =
-            Angle.inDegrees targetAngle
-
-        deltaDegrees =
-            targetDegrees - degrees
-
-        normalizedDeltaDegrees =
-            if deltaDegrees > 180 then
-                deltaDegrees - 360
-
-            else
-                deltaDegrees
-
-        turnSpeed =
-            min 1 (d * 4)
-    in
-    (degrees + (turnSpeed * normalizedDeltaDegrees))
-        |> Angle.degrees
+prepareNewNpcAction : EntityID -> Cmd Msg
+prepareNewNpcAction npcId =
+    Random.generate (GotNpcAction npcId) genNpcAction
 
 
-npcTickAction : Float -> Npc -> ( Npc, Cmd Msg )
-npcTickAction d npc =
-    if npc.actionTimeLeft <= 0 then
-        ( npc, prepareNewNpcAction npc )
-
-    else
-        let
-            newNpc =
-                case npc.action of
-                    NpcWaiting ->
-                        npc
-
-                    NpcPacing _ ->
-                        let
-                            npcSpeed =
-                                0.5
-
-                            dPos =
-                                Vector3d.rThetaOn
-                                    SketchPlane3d.xy
-                                    (Length.meters <| d * npcSpeed)
-                                    npc.angle
-
-                            newPos =
-                                Vector3d.plus
-                                    npc.pos
-                                    dPos
-                        in
-                        { npc | pos = newPos }
-
-                    NpcTalking _ _ ->
-                        -- This branch was handled elsewhere and should never be reached
-                        npc
-        in
-        ( newNpc, Cmd.none )
-
-
-prepareNewNpcAction : Npc -> Cmd Msg
-prepareNewNpcAction npc =
-    Random.generate (GotNpcAction npc.id) (genNpcAction npc)
-
-
-genNpcAction : Npc -> Random.Generator ( NpcAction, Float )
-genNpcAction npc =
+genNpcAction : Random.Generator ( NpcAction, Float )
+genNpcAction =
     Random.weighted
-        ( 2, genNpcWaiting npc )
-        [ ( 3, genNpcPacing npc )
+        ( 2, genNpcWaiting )
+        [ ( 3, genNpcPacing )
         ]
         |> Random.andThen identity
 
 
-genNpcWaiting : Npc -> Random.Generator ( NpcAction, Float )
-genNpcWaiting _ =
+genNpcWaiting : Random.Generator ( NpcAction, Float )
+genNpcWaiting =
     Random.map
         (\duration -> ( NpcWaiting, duration ))
         (Random.float 1 4)
 
 
-genNpcPacing : Npc -> Random.Generator ( NpcAction, Float )
-genNpcPacing npc =
-    let
-        npcDegrees =
-            Angle.inDegrees npc.angle
-    in
+genNpcPacing : Random.Generator ( NpcAction, Float )
+genNpcPacing =
     Random.map2 (\angle duration -> ( NpcPacing angle, duration ))
-        (Random.float (npcDegrees - 60) (npcDegrees + 60) |> Random.map Angle.degrees)
+        (Random.float -60 60 |> Random.map Angle.degrees)
         (Random.float 1 3)
 
 
@@ -588,82 +628,121 @@ genNpcPacing npc =
 keyEvent : Model -> ( Model, Cmd Msg )
 keyEvent model =
     let
-        ( newDialog, newNpcs ) =
+        ( newDialog, newWorld ) =
             if wasKeyPressed Keyboard.Spacebar model then
                 case model.dialog of
                     Nothing ->
-                        findNewDialog model
+                        findNewDialog model.world
 
                     Just d ->
-                        advanceDialog d model.npcs
+                        advanceDialog d model.world
 
             else
-                ( model.dialog, model.npcs )
+                ( model.dialog, model.world )
 
         newModel =
             { model
-                | npcs = newNpcs
-                , dialog = newDialog
+                | dialog = newDialog
+                , world = newWorld
             }
     in
     ( newModel, Cmd.none )
 
 
-findNewDialog : Model -> ( Maybe Dialog, Dict Int Npc )
-findNewDialog model =
-    case findNpcToTalkWith model.player model.npcs of
-        Just talkingNpc ->
-            let
-                newAngle =
-                    angleFromPoints talkingNpc.pos model.player.pos
-
-                newAction =
-                    NpcTalking newAngle ( talkingNpc.action, talkingNpc.actionTimeLeft )
-
-                newNpcs =
-                    Dict.update
-                        talkingNpc.id
-                        (Maybe.map <| applyNpcAction newAction 0)
-                        model.npcs
-
-                dialog =
-                    createDialog
-                        { title = talkingNpc.name
-                        , texts = talkingNpc.dialog
-                        , talkingNpcId = talkingNpc.id
-                        }
-            in
-            ( dialog, newNpcs )
+findNewDialog : World -> ( Maybe Dialog, World )
+findNewDialog world =
+    case
+        Component.get world.playerId world.positions
+            |> Maybe.andThen
+                (\playerPos ->
+                    findNpcToTalkWith playerPos world
+                        |> Maybe.map (Tuple.pair playerPos)
+                )
+    of
+        Just ( playerPos, npcId ) ->
+            Maybe.map3
+                (\pos ( npcAction, npcActionUntil ) meta ->
+                    { id = npcId
+                    , pos = pos
+                    , action = npcAction
+                    , actionUntil = npcActionUntil
+                    , meta = meta
+                    }
+                )
+                (Component.get npcId world.positions)
+                (Component.get npcId world.npcActions)
+                (Component.get npcId world.npcMetas)
+                |> Maybe.map (startNpcDialog playerPos world)
+                |> Maybe.withDefault ( Nothing, world )
 
         Nothing ->
-            ( Nothing, model.npcs )
+            ( Nothing, world )
 
 
-applyNpcAction : NpcAction -> Float -> Npc -> Npc
-applyNpcAction action actionTimeLeft npc =
+startNpcDialog :
+    Position
+    -> World
+    ->
+        { id : EntityID
+        , pos : Position
+        , action : NpcAction
+        , actionUntil : Float
+        , meta : NpcMeta
+        }
+    -> ( Maybe Dialog, World )
+startNpcDialog playerPos world npc =
     let
-        newTargetAngle =
-            case action of
-                NpcPacing angle ->
-                    angle
+        newAngle =
+            angleFromPoints npc.pos playerPos
 
-                NpcTalking angle _ ->
-                    angle
+        newNpcAction =
+            NpcTalking newAngle ( npc.action, npc.actionUntil )
 
-                _ ->
-                    npc.targetAngle
+        newWorld =
+            applyNpcAction newNpcAction 0 npc.id world
+
+        dialog =
+            createDialog
+                { title = npc.meta.name
+                , texts = npc.meta.dialog
+                , talkingNpcId = npc.id
+                }
     in
-    { npc
-        | action = action
-        , actionTimeLeft = actionTimeLeft
-        , targetAngle = newTargetAngle
-    }
+    ( dialog, newWorld )
 
 
-angleFromPoints :
-    Vector3d Length.Meters WorldCoordinates
-    -> Vector3d Length.Meters WorldCoordinates
-    -> Angle
+applyNpcAction : NpcAction -> Float -> EntityID -> World -> World
+applyNpcAction action until npcId w =
+    case Component.get npcId w.angles of
+        Nothing ->
+            w
+
+        Just ( angle, targetAngle ) ->
+            let
+                newTargetAngle =
+                    case action of
+                        NpcPacing a ->
+                            a
+
+                        NpcTalking a _ ->
+                            a
+
+                        _ ->
+                            targetAngle
+
+                newAngles =
+                    Component.set npcId ( angle, newTargetAngle ) w.angles
+
+                newNpcActions =
+                    Component.set npcId ( action, until ) w.npcActions
+            in
+            { w
+                | angles = newAngles
+                , npcActions = newNpcActions
+            }
+
+
+angleFromPoints : Position -> Position -> Angle
 angleFromPoints a b =
     let
         diff =
@@ -672,15 +751,15 @@ angleFromPoints a b =
     Angle.atan2 (Vector3d.yComponent diff) (Vector3d.xComponent diff)
 
 
-advanceDialog : Dialog -> Dict Int Npc -> ( Maybe Dialog, Dict Int Npc )
-advanceDialog dialog npcs =
+advanceDialog : Dialog -> World -> ( Maybe Dialog, World )
+advanceDialog dialog world =
     let
         minAdvanceDuration =
             minDurationToAdvanceDialogText dialog.text
     in
     if dialog.duration > minAdvanceDuration then
         if dialog.queue == [] then
-            ( Nothing, stopNpcTalking dialog.talkingNpcId npcs )
+            ( Nothing, stopNpcTalking dialog.talkingNpcId world )
 
         else
             ( createDialog
@@ -688,28 +767,21 @@ advanceDialog dialog npcs =
                 , texts = dialog.queue
                 , talkingNpcId = dialog.talkingNpcId
                 }
-            , npcs
+            , world
             )
 
     else
-        ( Just { dialog | duration = minAdvanceDuration }, npcs )
+        ( Just { dialog | duration = minAdvanceDuration }, world )
 
 
-stopNpcTalking : Int -> Dict Int Npc -> Dict Int Npc
-stopNpcTalking npcId npcs =
-    Dict.update
-        npcId
-        (Maybe.map
-            (\npc ->
-                case npc.action of
-                    NpcTalking _ ( action, actionTimeLeft ) ->
-                        applyNpcAction action actionTimeLeft npc
+stopNpcTalking : EntityID -> World -> World
+stopNpcTalking npcId world =
+    case Component.get npcId world.npcActions of
+        Just ( NpcTalking _ ( prevAction, prevUntil ), _ ) ->
+            applyNpcAction prevAction prevUntil npcId world
 
-                    _ ->
-                        npc
-            )
-        )
-        npcs
+        _ ->
+            world
 
 
 minDurationToAdvanceDialogText : String -> Float
@@ -738,17 +810,27 @@ createDialog { title, texts, talkingNpcId } =
                 }
 
 
-findNpcToTalkWith : Player -> Dict Int Npc -> Maybe Npc
-findNpcToTalkWith player npcs =
-    npcs
-        |> Dict.values
-        |> List.find (\npc -> isNearby player.pos npc.pos)
+findNpcToTalkWith : Position -> World -> Maybe EntityID
+findNpcToTalkWith playerPos world =
+    System.indexedFoldl2
+        (\npcId _ npcPos result ->
+            case result of
+                Just _ ->
+                    result
+
+                Nothing ->
+                    if isNearby playerPos npcPos then
+                        Just npcId
+
+                    else
+                        Nothing
+        )
+        world.npcActions
+        world.positions
+        Nothing
 
 
-isNearby :
-    Vector3d Length.Meters WorldCoordinates
-    -> Vector3d Length.Meters WorldCoordinates
-    -> Bool
+isNearby : Position -> Position -> Bool
 isNearby a b =
     let
         minDistance =
@@ -772,7 +854,7 @@ wasKeyPressed key model =
 -- ENTITIES
 
 
-makeCube : Color -> Entity
+makeCube : Color -> Shape
 makeCube color =
     let
         -- 1x1m cube
@@ -879,7 +961,7 @@ makeCube color =
 makeFloor :
     Texture
     -> Texture
-    -> Entity
+    -> Shape
 makeFloor grassTx waterTx =
     let
         ( g, w ) =
@@ -944,7 +1026,7 @@ getMapForTexture map id =
     ( id, List.map processRow map )
 
 
-mapAndTextureToEntity : (Int -> Texture) -> ( Int, List2d Bool ) -> Entity
+mapAndTextureToEntity : (Int -> Texture) -> ( Int, List2d Bool ) -> Shape
 mapAndTextureToEntity textureFromId ( id, map ) =
     let
         tx =
@@ -1016,26 +1098,29 @@ view model =
                 |> Html.div []
 
 
-gameView : Model -> Entity -> Html msg
+gameView : Model -> Shape -> Html msg
 gameView model floor =
     let
-        player =
-            model.player.entity
-                |> Scene3d.rotateAround Axis3d.z model.player.angle
-                |> Scene3d.translateBy model.player.pos
-
-        npcs =
-            model.npcs
-                |> Dict.values
-                |> List.map
-                    (\n ->
-                        n.entity
-                            |> Scene3d.rotateAround Axis3d.z n.angle
-                            |> Scene3d.translateBy n.pos
+        shapes =
+            System.foldl3
+                (\shape ( angle, _ ) position acc ->
+                    (shape
+                        |> Scene3d.rotateAround Axis3d.z angle
+                        |> Scene3d.translateBy position
                     )
+                        :: acc
+                )
+                (shapeSpec.get model.world)
+                (angleSpec.get model.world)
+                (positionSpec.get model.world)
+                []
+
+        playerPos =
+            Component.get model.world.playerId model.world.positions
+                |> Maybe.withDefault (Vector3d.meters 0 0 0)
 
         cameraPos =
-            Point3d.translateBy model.player.pos Point3d.origin
+            Point3d.translateBy playerPos Point3d.origin
 
         camera =
             Camera3d.perspective
@@ -1054,12 +1139,12 @@ gameView model floor =
         [ fpsView model.deltas
         , dialogView model.dialog
         , Scene3d.custom
-            { entities = [ player, floor ] ++ npcs
+            { entities = floor :: shapes
             , camera = camera
             , background = Scene3d.backgroundColor Color.black
             , clipDepth = Length.meters 0.01
             , dimensions = ( Pixels.int 800, Pixels.int 480 )
-            , lights = getLights model.time
+            , lights = getLights model.world.time
             , exposure = Scene3d.exposureValue 5
             , whiteBalance = Light.skylight
             , antialiasing = Scene3d.multisampling
