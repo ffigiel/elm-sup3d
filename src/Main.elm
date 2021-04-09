@@ -543,39 +543,52 @@ npcActionSystem d w =
 smoothTurnSystem : Float -> World -> World
 smoothTurnSystem d w =
     System.step
-        (\( angle, targetAngle ) ->
-            let
-                degrees =
-                    Angle.inDegrees angle
-
-                targetDegrees =
-                    Angle.inDegrees targetAngle
-
-                deltaDegrees =
-                    targetDegrees - degrees
-
-                normalizedDeltaDegrees =
-                    if deltaDegrees > 180 then
-                        deltaDegrees - 360
-
-                    else if deltaDegrees < -180 then
-                        deltaDegrees + 360
-
-                    else
-                        deltaDegrees
-
-                turnSpeed =
-                    min 1 (d * 3)
-
-                newAngle =
-                    (degrees + (turnSpeed * normalizedDeltaDegrees))
-                        |> Angle.degrees
-                        |> Angle.normalize
-            in
-            ( newAngle, targetAngle )
-        )
+        (updateTargetAngle d)
         angleSpec
         w
+
+
+updateTargetAngle : Float -> ( Angle, Angle ) -> ( Angle, Angle )
+updateTargetAngle d ( angle, targetAngle ) =
+    let
+        degrees =
+            Angle.inDegrees angle
+
+        targetDegrees =
+            Angle.inDegrees targetAngle
+
+        deltaDegrees =
+            targetDegrees - degrees
+
+        normalizedDeltaDegrees =
+            if deltaDegrees > 180 then
+                deltaDegrees - 360
+
+            else if deltaDegrees < -180 then
+                deltaDegrees + 360
+
+            else
+                deltaDegrees
+
+        deltaSign =
+            abs normalizedDeltaDegrees / normalizedDeltaDegrees
+
+        turnSpeed =
+            90 * d
+
+        turnDelta =
+            if turnSpeed > abs normalizedDeltaDegrees then
+                normalizedDeltaDegrees
+
+            else
+                turnSpeed * deltaSign
+
+        newAngle =
+            (degrees + turnDelta)
+                |> Angle.degrees
+                |> Angle.normalize
+    in
+    ( newAngle, targetAngle )
 
 
 npcBehaviorCmd : World -> Cmd Msg
