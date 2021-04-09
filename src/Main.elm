@@ -295,9 +295,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Tick d ->
-            model
-                |> ecsTick d
-                |> gameTick d
+            gameTick d model
 
         Resized ->
             ( model, getViewport )
@@ -440,17 +438,33 @@ npcMetaSpec =
 -- TICK
 
 
-ecsTick : Float -> Model -> Model
-ecsTick d model =
+gameTick : Float -> Model -> ( Model, Cmd Msg )
+gameTick d model =
     let
+        newFpsCounter =
+            fpsCounterTick d model.fpsCounter
+
+        newDialog =
+            Maybe.map (\dialog -> { dialog | duration = dialog.duration + d }) model.dialog
+
         newWorld =
             model.world
                 |> timeSystem d
-                |> System.applyIf (model.dialog == Nothing) (playerMovementSystem d model.pressedKeys)
+                |> System.applyIf (newDialog == Nothing) (playerMovementSystem d model.pressedKeys)
                 |> npcActionSystem d
                 |> smoothTurnSystem d
+
+        newModel =
+            { model
+                | fpsCounter = newFpsCounter
+                , dialog = newDialog
+                , world = newWorld
+            }
+
+        cmd =
+            npcBehaviorCmd newWorld
     in
-    { model | world = newWorld }
+    ( newModel, cmd )
 
 
 timeSystem : Float -> World -> World
@@ -562,27 +576,6 @@ smoothTurnSystem d w =
         )
         angleSpec
         w
-
-
-gameTick : Float -> Model -> ( Model, Cmd Msg )
-gameTick d model =
-    let
-        newDialog =
-            Maybe.map (\dialog -> { dialog | duration = dialog.duration + d }) model.dialog
-
-        newFpsCounter =
-            fpsCounterTick d model.fpsCounter
-
-        newModel =
-            { model
-                | fpsCounter = newFpsCounter
-                , dialog = newDialog
-            }
-
-        cmd =
-            npcBehaviorCmd model.world
-    in
-    ( newModel, cmd )
 
 
 npcBehaviorCmd : World -> Cmd Msg
